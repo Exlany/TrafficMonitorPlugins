@@ -69,6 +69,25 @@ BOOL CManagerDialog::OnInitDialog()
     CheckDlgButton(IDC_SHOW_STOCK_NAME_CHECK, m_data.m_show_stock_name);
     CheckDlgButton(IDC_COLOR_WITH_PRICE_CHECK, m_data.m_color_with_price);
 
+    // 初始化价格小数位数下拉框
+    CComboBox* pCombo = (CComboBox*)GetDlgItem(IDC_PRICE_DECIMAL_COMBO);
+    pCombo->AddString(_T("2"));
+    pCombo->AddString(_T("3"));
+    pCombo->SetCurSel(m_data.m_price_decimal == 2 ? 0 : 1);
+
+    // 初始化显示模式下拉框
+    CComboBox* pModeCombo = (CComboBox*)GetDlgItem(IDC_DISPLAY_MODE_COMBO);
+    pModeCombo->AddString(g_data.StringRes(IDS_DISPLAY_MODE_SHOWALL));
+    pModeCombo->AddString(g_data.StringRes(IDS_DISPLAY_MODE_CAROUSEL));
+    pModeCombo->AddString(g_data.StringRes(IDS_DISPLAY_MODE_MANUAL));
+    pModeCombo->AddString(g_data.StringRes(IDS_DISPLAY_MODE_SMART));
+    pModeCombo->SetCurSel(static_cast<int>(m_data.m_display_mode));
+
+    // 初始化轮播间隔
+    CString intervalStr;
+    intervalStr.Format(_T("%d"), m_data.m_carousel_interval);
+    SetDlgItemText(IDC_CAROUSEL_INTERVAL_EDIT, intervalStr);
+
     CString value;
     value.Format(_T("%d"), static_cast<int>(g_data.m_setting_data.m_kline_width));
     SetDlgItemText(IDC_KLINE_WIDTH_EDIT, value);
@@ -123,6 +142,13 @@ void CManagerDialog::OnAddBtnClick()
             Log1("OnAddBtnClick: %s\n", stock_code.c_str());
             m_data.m_stock_codes.push_back(stock_code.c_str());
             m_stock_listbox.AddString(stock_code.c_str());
+
+            // 保存别名
+            std::wstring alias = dlg.m_stock_alias.GetString();
+            if (!alias.empty())
+            {
+                m_data.m_stock_aliases[stock_code] = alias;
+            }
         }
     }
 }
@@ -150,6 +176,22 @@ void CManagerDialog::OnBnClickedOk()
     m_data.m_kline_width = _ttoi(value);
     GetDlgItemText(IDC_KLINE_HEIGHT_EDIT, value);
     m_data.m_kline_height = _ttoi(value);
+
+    // 保存价格小数位数
+    CComboBox* pCombo = (CComboBox*)GetDlgItem(IDC_PRICE_DECIMAL_COMBO);
+    m_data.m_price_decimal = (pCombo->GetCurSel() == 0) ? 2 : 3;
+
+    // 保存显示模式
+    CComboBox* pModeCombo = (CComboBox*)GetDlgItem(IDC_DISPLAY_MODE_COMBO);
+    m_data.m_display_mode = static_cast<StockDisplayMode>(pModeCombo->GetCurSel());
+
+    // 保存轮播间隔
+    CString intervalStr;
+    GetDlgItemText(IDC_CAROUSEL_INTERVAL_EDIT, intervalStr);
+    m_data.m_carousel_interval = _ttoi(intervalStr);
+    if (m_data.m_carousel_interval < 1)
+        m_data.m_carousel_interval = 1;  // 最小1秒
+
     g_data.m_setting_data = m_data;
     g_data.SaveConfig();
     if (stock_code_changed)
@@ -170,15 +212,25 @@ void CManagerDialog::OnLbnDblclkMgrList()
     int index = m_stock_listbox.GetCurSel();
     if (index >= 0 && index < m_data.m_stock_codes.size())
     {
-        COptionsDlg dlg(m_data.m_stock_codes[index], this);
+        std::wstring old_code = m_data.m_stock_codes[index];
+        COptionsDlg dlg(old_code, this);
         auto rtn = dlg.DoModal();
         if (rtn == IDOK)
         {
             if (!dlg.m_stock_code.IsEmpty())
             {
-                m_data.m_stock_codes[index] = dlg.m_stock_code;
+                std::wstring new_code = dlg.m_stock_code.GetString();
+                m_data.m_stock_codes[index] = new_code;
                 m_stock_listbox.DeleteString(index);
                 m_stock_listbox.InsertString(index, dlg.m_stock_code);
+
+                // 更新别名
+                m_data.m_stock_aliases.erase(old_code);
+                std::wstring alias = dlg.m_stock_alias.GetString();
+                if (!alias.empty())
+                {
+                    m_data.m_stock_aliases[new_code] = alias;
+                }
             }
         }
     }

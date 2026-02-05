@@ -70,6 +70,7 @@ namespace STOCK
     void LoadSZ(std::vector<std::string> data, size_t size);
     void LoadBJ(std::vector<std::string> data, size_t size);
     void LoadHK(std::vector<std::string> data, size_t size);
+    void LoadINT(std::vector<std::string> data, size_t size);  // 国际指数/期货
   };
 
   // 分时数据点
@@ -169,6 +170,8 @@ namespace STOCK
     RealTimeData realTimeData; // 最新数据
 
     std::wstring GetCurrentDisplay(bool include_name = true) const;
+    // 获取显示名称（优先别名，其次智能简称）
+    std::wstring GetDisplayName() const;
 
     // 使用智能指针管理历史数据
     std::map<Period, std::shared_ptr<HistoricalDataBase>> historicalData;
@@ -221,11 +224,17 @@ namespace STOCK
   public:
     void LoadRealtimeDataByJson(std::string data);
     void LoadTimelineDataByJson(std::wstring stock_id, CString *data);
+    void LoadOKXDataByJson(const std::wstring& code, const std::string& json);  // OKX虚拟货币数据
 
-    void ClearRealtimeData()
+    void ClearRealtimeData(bool includeOKX = true)
     {
       for (const auto &it : stocks)
       {
+        // 如果不清除OKX数据，跳过okx_开头的代码
+        if (!includeOKX && it.first.find(L"okx_") == 0)
+        {
+          continue;
+        }
         RealTimeData data;
         it.second->realTimeData = data;
       }

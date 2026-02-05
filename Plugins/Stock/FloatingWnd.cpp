@@ -144,7 +144,7 @@ CPoint CFloatingWnd::Stock2Point(int x, int y, int w, int h, float unitY, const 
 {
     CPoint p = CPoint();
     std::vector<std::string> time_arr = CCommon::split(item.time, ":");
-    if (time_arr.size() == 3)
+    if (time_arr.size() >= 2)  // 至少需要小时和分钟
     {
         // 9:30 10:00 11:30 13:00 14:00 15:00
         static int before12ClockOffset = 570; // 9.5 * 60;
@@ -164,9 +164,9 @@ CPoint CFloatingWnd::Stock2Point(int x, int y, int w, int h, float unitY, const 
         {
             countX -= after12ClockOffset;
         }
-        p.x = w / totalMinutes * countX;
+        p.x = static_cast<int>(w / totalMinutes * countX);
     }
-    p.y = (item.price - prevClosePrice) * unitY * 100;
+    p.y = static_cast<int>((item.price - prevClosePrice) * unitY * 100);
     return p;
 }
 
@@ -192,10 +192,21 @@ void CFloatingWnd::OnPaint()
 
     memDC.SetBkMode(TRANSPARENT);
 
-    int x = rect.left, y = rect.top, h = rect.Height(), w = rect.Width();
+    int x = rect.left, y = rect.top, totalH = rect.Height(), w = rect.Width();
+
+    // 分区计算：分时图(68%) + 间隔(4%) + 成交量(28%)
+    int timelineH = static_cast<int>(totalH * 0.68);
+    int gap = static_cast<int>(totalH * 0.04);
+    int volumeH = totalH - timelineH - gap;
+    int volumeTop = timelineH + gap;
+
+    // 使用分时图高度作为h
+    int h = timelineH;
 
     CPen pGrid(PS_DOT, 1, RGB(240, 240, 240));
     CPen *pOldPen = memDC.SelectObject(&pGrid);
+
+    // 分时图网格线
     memDC.MoveTo(0, h / 4);
     memDC.LineTo(w, h / 4);
     memDC.MoveTo(0, h / 4 * 3);
@@ -213,6 +224,10 @@ void CFloatingWnd::OnPaint()
     memDC.MoveTo(0, h / 2);
     memDC.LineTo(w, h / 2);
 
+    // 成交量区域分隔线
+    memDC.MoveTo(0, timelineH);
+    memDC.LineTo(w, timelineH);
+
     CPen pKLine(PS_SOLID, 1, RGB(70, 113, 152));
     memDC.SelectObject(&pKLine);
 
@@ -227,22 +242,26 @@ void CFloatingWnd::OnPaint()
 
     if (timelinePoint.size() > 0)
     {
-        float halfH = h / 2.0;
+        float halfH = h / 2.0f;
 
         STOCK::Price priceLimit = realtimeData.priceLimit;
         float unitY = priceLimit != 0 ? halfH / (priceLimit * 100) : 0;
+
+        // 分时图区域的rect
+        CRect timelineRect = rect;
+        timelineRect.bottom = timelineH;
 
         memDC.SetTextColor(RGB(179, 64, 65));
         float upperLimitPrice = realtimeData.prevClosePrice + priceLimit;
         CString upperLimitTxt;
         upperLimitTxt.Format(_T("%.2f"), upperLimitPrice);
-        CRect upperLimitTxtRect{rect};
+        CRect upperLimitTxtRect{timelineRect};
         upperLimitTxtRect.right = upperLimitTxtRect.left + memDC.GetTextExtent(upperLimitTxt).cx;
         memDC.DrawText(upperLimitTxt, upperLimitTxtRect, DT_TOP | DT_SINGLELINE | DT_NOPREFIX);
 
         CString upperLimitRateTxt;
         upperLimitRateTxt.Format(_T("%.2f%%"), priceLimit * 100.0 / realtimeData.prevClosePrice);
-        CRect upperLimitRateTxtRect{rect};
+        CRect upperLimitRateTxtRect{timelineRect};
         upperLimitRateTxtRect.left = w - (upperLimitRateTxtRect.left + memDC.GetTextExtent(upperLimitRateTxt).cx);
         memDC.DrawText(upperLimitRateTxt, upperLimitRateTxtRect, DT_TOP | DT_SINGLELINE | DT_NOPREFIX);
 
@@ -250,20 +269,20 @@ void CFloatingWnd::OnPaint()
         float lowerLimitPrice = realtimeData.prevClosePrice - priceLimit;
         CString lowerLimitTxt;
         lowerLimitTxt.Format(_T("%.2f"), lowerLimitPrice);
-        CRect lowerLimitTxtRect{rect};
+        CRect lowerLimitTxtRect{timelineRect};
         lowerLimitTxtRect.right = lowerLimitTxtRect.left + memDC.GetTextExtent(lowerLimitTxt).cx;
         memDC.DrawText(lowerLimitTxt, lowerLimitTxtRect, DT_BOTTOM | DT_SINGLELINE | DT_NOPREFIX);
 
         CString lowerLimitRateTxt;
         lowerLimitRateTxt.Format(_T("-%.2f%%"), priceLimit * 100.0 / realtimeData.prevClosePrice);
-        CRect lowerLimitRateTxtRect{rect};
+        CRect lowerLimitRateTxtRect{timelineRect};
         lowerLimitRateTxtRect.left = w - (lowerLimitRateTxtRect.left + memDC.GetTextExtent(lowerLimitRateTxt).cx);
         memDC.DrawText(lowerLimitRateTxt, lowerLimitRateTxtRect, DT_BOTTOM | DT_SINGLELINE | DT_NOPREFIX);
 
         memDC.SetTextColor(RGB(154, 151, 157));
         CString middleTxt;
         middleTxt.Format(_T("%.2f"), realtimeData.prevClosePrice);
-        CRect middleTxtRect{rect};
+        CRect middleTxtRect{timelineRect};
         middleTxtRect.right = middleTxtRect.left + memDC.GetTextExtent(middleTxt).cx;
         memDC.DrawText(middleTxt, middleTxtRect, DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
@@ -274,14 +293,17 @@ void CFloatingWnd::OnPaint()
             dataPoints.push_back(p);
         }
 
-        int startY = halfH - (realtimeData.openPrice - realtimeData.prevClosePrice) * unitY * 100;
+        int startY = static_cast<int>(halfH - (realtimeData.openPrice - realtimeData.prevClosePrice) * unitY * 100);
         memDC.MoveTo(x, startY);
         for (int i = 0; i < dataPoints.size(); i++)
         {
             int pX = dataPoints[i].x;
-            int pY = halfH - dataPoints[i].y;
+            int pY = static_cast<int>(halfH - dataPoints[i].y);
             memDC.LineTo(pX, pY);
         }
+
+        // 绘制成交量柱状图
+        DrawVolumeChart(&memDC, timelinePoint, dataPoints, realtimeData.prevClosePrice, volumeTop, volumeH, w);
     }
     else
     {
@@ -296,6 +318,66 @@ void CFloatingWnd::OnPaint()
     dc.BitBlt(0, 0, rect.Width(), rect.Height(), &memDC, 0, 0, SRCCOPY);
 
     memDC.SelectObject(pOldBitmap);
+}
+
+void CFloatingWnd::DrawVolumeChart(CDC *pDC, const std::vector<STOCK::TimelinePoint> &timelinePoint,
+                                    const std::vector<CPoint> &dataPoints, STOCK::Price prevClosePrice,
+                                    int volumeTop, int volumeH, int w)
+{
+    if (timelinePoint.empty() || dataPoints.empty())
+        return;
+
+    // 计算最大成交量用于Y轴缩放
+    STOCK::Volume maxVolume = 0;
+    for (const auto &point : timelinePoint)
+    {
+        if (point.volume > maxVolume)
+            maxVolume = point.volume;
+    }
+
+    if (maxVolume == 0)
+        return;
+
+    // 计算柱状图宽度
+    int barWidth = max(1, w / static_cast<int>(timelinePoint.size()) - 1);
+    if (barWidth < 1)
+        barWidth = 1;
+
+    // 绘制每个成交量柱
+    for (size_t i = 0; i < timelinePoint.size() && i < dataPoints.size(); i++)
+    {
+        const auto &point = timelinePoint[i];
+        int barHeight = static_cast<int>((static_cast<double>(point.volume) / maxVolume) * volumeH);
+        if (barHeight < 1)
+            barHeight = 1;
+
+        int barX = dataPoints[i].x;
+        int barY = volumeTop + volumeH - barHeight;
+
+        // 判断涨跌颜色：当前价格与前一个价格比较，或与昨收比较
+        COLORREF barColor;
+        if (i == 0)
+        {
+            // 第一个点与昨收比较
+            barColor = (point.price >= prevClosePrice) ? RGB(195, 0, 0) : RGB(46, 139, 87);
+        }
+        else
+        {
+            // 与前一个点比较
+            barColor = (point.price >= timelinePoint[i - 1].price) ? RGB(195, 0, 0) : RGB(46, 139, 87);
+        }
+
+        // 绘制柱状
+        CBrush brush(barColor);
+        CBrush *pOldBrush = pDC->SelectObject(&brush);
+        CPen pen(PS_SOLID, 1, barColor);
+        CPen *pOldPen = pDC->SelectObject(&pen);
+
+        pDC->Rectangle(barX - barWidth / 2, barY, barX + barWidth / 2 + 1, volumeTop + volumeH);
+
+        pDC->SelectObject(pOldBrush);
+        pDC->SelectObject(pOldPen);
+    }
 }
 
 BOOL CFloatingWnd::OnEraseBkgnd(CDC *pDC)

@@ -11,10 +11,12 @@
 constexpr auto kSH = L"sh";    // 上海
 constexpr auto kSZ = L"sz";    // 深圳
 constexpr auto kHK = L"rt_hk"; // 香港
-constexpr auto kMG = L"gb_";   // 美国
+constexpr auto kMG = L"gb_";   // 美国个股
+constexpr auto kMGI = L"int_"; // 美国指数
 constexpr auto kBJ = L"bj";    // 北京
+constexpr auto kOKX = L"okx_"; // OKX虚拟货币
 
-const std::vector<CString> StockTypeSet{kSH, kSZ, kHK, kMG, kBJ};
+const std::vector<CString> StockTypeSet{kSH, kSZ, kHK, kMG, kMGI, kBJ, kOKX};
 
 #define Stock_ITEM_MAX 10
 
@@ -47,14 +49,19 @@ public:
     void ShowFloatingWnd(void *hWnd, CPoint ptScreen, std::wstring stock_id);
     void DestroyFloatingWnd();
     void UpdateKLine();
+    void SwitchToNextStock();  // 手动模式下切换到下一只股票
+    size_t GetCurrentDisplayIndex() const { return m_current_display_index; }  // 获取当前显示的股票索引
+    size_t GetSecondRowIndex();  // 获取第二行显示的股票索引
 
 public:
     std::mutex m_stockDataMutex;
 
 private:
     static UINT ThreadCallback(LPVOID dwUser);
+    static UINT CheckUpdateThread(LPVOID pParam);  // 更新检查线程
     void LoadContextMenu();
     void updateItems();
+    int GetSmartIndex();  // 获取涨跌幅最大的股票索引
 
 private:
     static Stock m_instance;
@@ -67,6 +74,10 @@ private:
 
     std::mutex m_wndMutex;
     CFloatingWnd *m_pFloatingWnd;
+
+    // 显示模式相关
+    int m_current_display_index{0};      // 当前显示的股票索引
+    time_t m_last_carousel_time{0};      // 上次轮播切换时间
 };
 
 #ifdef __cplusplus

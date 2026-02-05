@@ -1,0 +1,347 @@
+name: Build Stock Plugin
+
+on:
+  push:
+    tags:
+      - 'stock-plugin-v*'
+      - 'v*'
+      - 'Stock_V*'
+    branches:
+      - main
+      - master
+      - clistery
+    paths:
+      - 'Plugins/Stock/**'
+      - 'utilities/**'
+      - 'include/**'
+      - '.github/workflows/build-stock-plugin.yml'
+      - '!**.md'
+  pull_request:
+    paths:
+      - 'Plugins/Stock/**'
+      - 'utilities/**'
+      - 'include/**'
+      - '.github/workflows/build-stock-plugin.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }} Release
+    runs-on: windows-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Release]
+        platform: [x86, x64, ARM64EC]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Build Stock Plugin (${{ matrix.configuration }} ${{ matrix.platform }})
+      working-directory: ${{ github.workspace }}
+      run: msbuild TrafficMonitorPlugins.sln /m /p:configuration="${{ matrix.configuration }}" /p:platform="${{ matrix.platform }}" /t:Stock /p:PlatformToolset="v143"
+
+    - name: Prepare artifact directory for ${{ matrix.platform }}
+      if: matrix.configuration == 'Release'
+      run: |
+        mkdir -p artifacts/${{ matrix.platform }}
+        if [ "${{ matrix.platform }}" == "x86" ]; then
+          cp bin/Release/Stock.dll artifacts/${{ matrix.platform }}/
+        else
+          cp bin/${{ matrix.platform }}/Release/Stock.dll artifacts/${{ matrix.platform }}/
+        fi
+      shell: bash
+
+    - name: Upload Stock DLL artifact for ${{ matrix.platform }}
+      if: matrix.configuration == 'Release'
+      uses: actions/upload-artifact@v4
+      with:
+        name: Stock-${{ matrix.platform }}
+        path: artifacts/${{ matrix.platform }}/
+        if-no-files-found: error
+        retention-days: 30
+
+    - name: Cleanup Runner Resources
+      if: always()
+      shell: powershell
+      run: |
+        Write-Host "Cleaning up Runner Resources..." -ForegroundColor Green
+        $startTime = Get-Date
+
+        # Clean up build artifacts
+        if (Test-Path "bin") {
+          Remove-Item -Path "bin" -Recurse -Force -ErrorAction SilentlyContinue
+          Write-Host "  [OK] Removed build output directory" -ForegroundColor Yellow
+        }
+
+        if (Test-Path "artifacts") {
+          Remove-Item -Path "artifacts" -Recurse -Force -ErrorAction SilentlyContinue
+          Write-Host "  [OK] Removed artifacts directory" -ForegroundColor Yellow
+        }
+
+        # Clean up temporary files
+        $tempDirs = @("C:\Windows\Temp")
+        if ($env:TEMP) {
+          $tempDirs += $env:TEMP
+        }
+        if ($env:USERPROFILE) {
+          $userTemp = Join-Path $env:USERPROFILE "AppData\Local\Temp"
+          $tempDirs += $userTemp
+        }
+
+        foreach ($dir in $tempDirs) {
+          if ([string]::IsNullOrWhiteSpace($dir) -or -not (Test-Path $dir)) {
+            continue
+          }
+
+          $oldFiles = Get-ChildItem -Path $dir -Recurse -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-7) }
+
+          if ($oldFiles) {
+            $totalSize = ($oldFiles | Measure-Object -Property Length -Sum).Sum
+            $oldFiles | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+            Write-Host "  [OK] Cleaned $([math]::Round($totalSize/1MB, 2)) MB from $dir" -ForegroundColor Yellow
+          }
+        }
+
+        # Clean up NuGet cache (keep recent packages)
+        if ($env:USERPROFILE) {
+          $nugetCache = Join-Path $env:USERPROFILE ".nuget\packages"
+          if (Test-Path $nugetCache) {
+            $nugetSizeBefore = (Get-ChildItem -Path $nugetCache -Recurse -Force -ErrorAction SilentlyContinue |
+              Measure-Object -Property Length -Sum).Sum / 1MB
+
+            Get-ChildItem -Path $nugetCache -Recurse -Force -Directory |
+              Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-30) } |
+              Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+
+            $nugetSizeAfter = (Get-ChildItem -Path $nugetCache -Recurse -Force -ErrorAction SilentlyContinue |
+              Measure-Object -Property Length -Sum).Sum / 1MB
+
+            Write-Host "  [OK] Cleaned NuGet cache: $([math]::Round($nugetSizeBefore - $nugetSizeAfter, 2)) MB freed" -ForegroundColor Yellow
+          }
+        }
+
+        # Clean up MSBuild cache
+        if ($env:LOCALAPPDATA) {
+          $msbuildCache = Join-Path $env:LOCALAPPDATA "Microsoft\VisualStudio"
+          if (Test-Path $msbuildCache) {
+            Get-ChildItem -Path $msbuildCache -Recurse -Force -ErrorAction SilentlyContinue |
+              Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-7) } |
+              Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+            Write-Host "  [OK] Cleaned MSBuild cache" -ForegroundColor Yellow
+          }
+        }
+
+        # Clean up .vs folder if exists
+        if (Test-Path ".vs") {
+          $vsSize = (Get-ChildItem -Path ".vs" -Recurse -Force -ErrorAction SilentlyContinue |
+            Measure-Object -Property Length -Sum).Sum / 1MB
+          Remove-Item -Path ".vs" -Recurse -Force -ErrorAction SilentlyContinue
+          Write-Host "  [OK] Removed .vs folder ($([math]::Round($vsSize, 2)) MB)" -ForegroundColor Yellow
+        }
+
+        # Clean up intermediate build files
+        $intermediateFiles = Get-ChildItem -Path "." -Filter "*.ipdb" -Recurse -Force -ErrorAction SilentlyContinue
+        if ($intermediateFiles) {
+          $ipdbSize = ($intermediateFiles | Measure-Object -Property Length -Sum).Sum / 1MB
+          $intermediateFiles | Remove-Item -Force -ErrorAction SilentlyContinue
+          Write-Host "  [OK] Removed IPDB files ($([math]::Round($ipdbSize, 2)) MB)" -ForegroundColor Yellow
+        }
+
+        $intermediateFiles = Get-ChildItem -Path "." -Filter "*.iobj" -Recurse -Force -ErrorAction SilentlyContinue
+        if ($intermediateFiles) {
+          $iobjSize = ($intermediateFiles | Measure-Object -Property Length -Sum).Sum / 1MB
+          $intermediateFiles | Remove-Item -Force -ErrorAction SilentlyContinue
+          Write-Host "  [OK] Removed IOBJ files ($([math]::Round($iobjSize, 2)) MB)" -ForegroundColor Yellow
+        }
+
+        # Display disk space
+        $disk = Get-PSDrive C
+        $freeSpaceGB = [math]::Round($disk.Free / 1GB, 2)
+        $usedSpaceGB = [math]::Round($disk.Used / 1GB, 2)
+
+        $duration = ((Get-Date) - $startTime).TotalSeconds
+
+        Write-Host "`nDisk Status:" -ForegroundColor Cyan
+        Write-Host "   Free: $freeSpaceGB GB" -ForegroundColor Cyan
+        Write-Host "   Used: $usedSpaceGB GB" -ForegroundColor Cyan
+        Write-Host "`nCleanup completed in: $([math]::Round($duration, 2)) seconds" -ForegroundColor Green
+        Write-Host "Runner cleanup completed successfully!" -ForegroundColor Green
+
+
+  release:
+    name: Release Stock Plugin
+    needs: build
+    runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Create release structure
+      run: |
+        mkdir -p release/StockPlugin/x86
+        mkdir -p release/StockPlugin/x64
+        mkdir -p release/StockPlugin/arm64ec
+        mkdir -p release/combined/x86
+        mkdir -p release/combined/x64
+        mkdir -p release/combined/arm64ec
+
+        cp "artifacts/Stock-x86/Stock.dll" "release/StockPlugin/x86/"
+        cp "artifacts/Stock-x86/Stock.dll" "release/combined/x86/"
+
+        cp "artifacts/Stock-x64/Stock.dll" "release/StockPlugin/x64/"
+        cp "artifacts/Stock-x64/Stock.dll" "release/combined/x64/"
+
+        cp "artifacts/Stock-ARM64EC/Stock.dll" "release/StockPlugin/arm64ec/"
+        cp "artifacts/Stock-ARM64EC/Stock.dll" "release/combined/arm64ec/"
+
+    - name: Create zip archives
+      run: |
+        Compress-Archive -Path "release/StockPlugin/x86/Stock.dll" -DestinationPath "release/StockPlugin-Stock-Win32-x86.zip"
+        Compress-Archive -Path "release/StockPlugin/x64/Stock.dll" -DestinationPath "release/StockPlugin-Stock-x64.zip"
+        Compress-Archive -Path "release/StockPlugin/arm64ec/Stock.dll" -DestinationPath "release/StockPlugin-Stock-arm64ec.zip"
+
+    - name: Build combined release with all architectures
+      run: |
+        Compress-Archive -Path "release/combined/*" -DestinationPath "release/StockPlugin-Stock-all-architectures.zip"
+
+    - name: Upload release artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: StockPlugin-release
+        path: release/*.zip
+        retention-days: 90
+
+    - name: Generate release notes
+      id: release_notes
+      run: |
+        $commit = git log -1 --pretty=format:"%h %s"
+        $date = Get-Date -Format "yyyy-MM-dd"
+        $tag = "${{ github.ref_name }}"
+        echo "### Stock Plugin $tag" > release-notes.md
+        echo "" >> release-notes.md
+        echo "**Release Date:** $date" >> release-notes.md
+        echo "" >> release-notes.md
+        echo "**Commit:** $commit" >> release-notes.md
+        echo "" >> release-notes.md
+        echo "## Downloads" >> release-notes.md
+        echo "- **Win32 (x86):** StockPlugin-Stock-Win32-x86.zip" >> release-notes.md
+        echo "- **x64:** StockPlugin-Stock-x64.zip" >> release-notes.md
+        echo "- **ARM64EC:** StockPlugin-Stock-arm64ec.zip" >> release-notes.md
+        echo "- **All Architectures:** StockPlugin-Stock-all-architectures.zip" >> release-notes.md
+        echo "" >> release-notes.md
+        echo "## Usage" >> release-notes.md
+        echo "1. Download the appropriate zip file for your TrafficMonitor architecture" >> release-notes.md
+        echo "2. Extract the DLL file" >> release-notes.md
+        echo "3. Copy the Stock.dll to TrafficMonitor's `plugins` directory" >> release-notes.md
+        echo "4. Restart TrafficMonitor" >> release-notes.md
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        name: ${{ github.ref_name }}
+        body_path: release-notes.md
+        files: |
+          release/StockPlugin-Stock-Win32-x86.zip
+          release/StockPlugin-Stock-x64.zip
+          release/StockPlugin-Stock-arm64ec.zip
+          release/StockPlugin-Stock-all-architectures.zip
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Cleanup Release Runner Resources
+      if: always()
+      shell: powershell
+      run: |
+        Write-Host "Cleaning up Release Runner Resources..." -ForegroundColor Green
+        $startTime = Get-Date
+
+        # Clean up release artifacts
+        if (Test-Path "release") {
+          $releaseSize = (Get-ChildItem -Path "release" -Recurse -Force -ErrorAction SilentlyContinue |
+            Measure-Object -Property Length -Sum).Sum / 1MB
+          Remove-Item -Path "release" -Recurse -Force -ErrorAction SilentlyContinue
+          Write-Host "  [OK] Removed release directory ($([math]::Round($releaseSize, 2)) MB)" -ForegroundColor Yellow
+        }
+
+        if (Test-Path "artifacts") {
+          $artifactsSize = (Get-ChildItem -Path "artifacts" -Recurse -Force -ErrorAction SilentlyContinue |
+            Measure-Object -Property Length -Sum).Sum / 1MB
+          Remove-Item -Path "artifacts" -Recurse -Force -ErrorAction SilentlyContinue
+          Write-Host "  [OK] Removed artifacts directory ($([math]::Round($artifactsSize, 2)) MB)" -ForegroundColor Yellow
+        }
+
+        # Clean up temporary files
+        $tempDirs = @()
+        if ($env:TEMP) {
+          $tempDirs += $env:TEMP
+        }
+        if ($env:USERPROFILE) {
+          $userTemp = Join-Path $env:USERPROFILE "AppData\Local\Temp"
+          $tempDirs += $userTemp
+        }
+
+        foreach ($dir in $tempDirs) {
+          if ([string]::IsNullOrWhiteSpace($dir) -or -not (Test-Path $dir)) {
+            continue
+          }
+
+          $oldFiles = Get-ChildItem -Path $dir -Recurse -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-7) }
+
+          if ($oldFiles) {
+            $totalSize = ($oldFiles | Measure-Object -Property Length -Sum).Sum
+            $oldFiles | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+            Write-Host "  [OK] Cleaned $([math]::Round($totalSize/1MB, 2)) MB from $dir" -ForegroundColor Yellow
+          }
+        }
+
+        # Clean up Windows Store cache
+        if ($env:LOCALAPPDATA) {
+          $storeCache = Join-Path $env:LOCALAPPDATA "Packages"
+          if (Test-Path $storeCache) {
+            $totalCleaned = 0
+            Get-ChildItem -Path $storeCache -Recurse -Force -Directory -ErrorAction SilentlyContinue |
+              Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-7) } |
+              ForEach-Object {
+                $cachePath = Join-Path $_.FullName "AC\Temp"
+                if (Test-Path $cachePath) {
+                  $size = (Get-ChildItem -Path $cachePath -Recurse -Force -ErrorAction SilentlyContinue |
+                    Measure-Object -Property Length -Sum).Sum / 1MB
+                  Remove-Item -Path $cachePath -Recurse -Force -ErrorAction SilentlyContinue
+                  $totalCleaned += $size
+                }
+              }
+            Write-Host "  [OK] Cleaned Windows Store cache ($([math]::Round($totalCleaned, 2)) MB)" -ForegroundColor Yellow
+          }
+        }
+
+        # Display disk space
+        $disk = Get-PSDrive C
+        $freeSpaceGB = [math]::Round($disk.Free / 1GB, 2)
+        $usedSpaceGB = [math]::Round($disk.Used / 1GB, 2)
+
+        $duration = ((Get-Date) - $startTime).TotalSeconds
+
+        Write-Host "`nDisk Status:" -ForegroundColor Cyan
+        Write-Host "   Free: $freeSpaceGB GB" -ForegroundColor Cyan
+        Write-Host "   Used: $usedSpaceGB GB" -ForegroundColor Cyan
+        Write-Host "`nCleanup completed in: $([math]::Round($duration, 2)) seconds" -ForegroundColor Green
+        Write-Host "Release cleanup completed successfully!" -ForegroundColor Green
+
+

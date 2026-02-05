@@ -1,6 +1,7 @@
-// Microsoft Visual C++ generated resource script.
+Ôªø// Microsoft Visual C++ generated resource script.
 //
 #include "resource.h"
+#include "StockVersion.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
@@ -13,11 +14,10 @@
 #undef APSTUDIO_READONLY_SYMBOLS
 
 /////////////////////////////////////////////////////////////////////////////
-// ÷–Œƒ(ºÚÃÂ£¨÷–π˙) resources
+// ‰∏≠Êñá(ÁÆÄ‰ΩìÔºå‰∏≠ÂõΩ) resources
 
 #if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_CHS)
 LANGUAGE LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED
-#pragma code_page(936)
 
 #ifdef APSTUDIO_INVOKED
 /////////////////////////////////////////////////////////////////////////////
@@ -50,44 +50,54 @@ END
 // Dialog
 //
 
-IDD_OPTIONS_DIALOG DIALOGEX 0, 0, 178, 90
+IDD_OPTIONS_DIALOG DIALOGEX 0, 0, 178, 118
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "π…∆±…Ë÷√"
-FONT 9, "Œ¢»Ì—≈∫⁄", 400, 0, 0x86
+CAPTION "ËÇ°Á•®ËÆæÁΩÆ"
+FONT 9, "ÂæÆËΩØÈõÖÈªë", 400, 0, 0x86
 BEGIN
-    DEFPUSHBUTTON   "»∑∂®",IDOK,65,69,50,14
-    PUSHBUTTON      "»°œ˚",IDCANCEL,121,69,50,14
-    LTEXT           "¥˙¬Î£∫",IDC_CODE_LABEL,7,8,23,8
+    DEFPUSHBUTTON   "Á°ÆÂÆö",IDOK,65,97,50,14
+    PUSHBUTTON      "ÂèñÊ∂à",IDCANCEL,121,97,50,14
+    LTEXT           "‰ª£Á†ÅÔºö",IDC_CODE_LABEL,7,8,23,8
     EDITTEXT        IDC_CODE_EDIT,33,7,138,12,ES_AUTOHSCROLL
-    GROUPBOX        "π…∆±¿‡–Õ",IDC_STATIC,7,23,164,42
-    CONTROL         "…Ó÷§",IDC_RADIO_SZ,"Button",BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP,15,35,32,10
-    CONTROL         "∏€π…",IDC_RADIO_HK,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,51,35,32,10
-    CONTROL         "±±ΩªÀ˘",IDC_RADIO_BJ,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,87,35,40,10
-    CONTROL         "…œ÷§",IDC_RADIO_SH,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,131,35,32,10
-    CONTROL         "√¿π…",IDC_RADIO_GB,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,15,49,32,10
-    CONTROL         "∆‰À˚£®–Ë“™«∞◊∫£©",IDC_RADIO_OTHER,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,51,49,96,10
+    LTEXT           "Âà´Âêç",IDC_STATIC,7,24,23,8
+    EDITTEXT        IDC_ALIAS_EDIT,33,22,138,12,ES_AUTOHSCROLL
+    GROUPBOX        "ËÇ°Á•®Á±ªÂûã",IDC_STATIC,7,39,164,54
+    CONTROL         "Ê∑±ËØÅ",IDC_RADIO_SZ,"Button",BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP,15,51,32,10
+    CONTROL         "Ê∏ØËÇ°",IDC_RADIO_HK,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,51,51,32,10
+    CONTROL         "Âåó‰∫§ÊâÄ",IDC_RADIO_BJ,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,87,51,40,10
+    CONTROL         "‰∏äËØÅ",IDC_RADIO_SH,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,131,51,32,10
+    CONTROL         "ÁæéËÇ°",IDC_RADIO_GB,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,15,65,32,10
+    CONTROL         "OKXÂ∏ÅÂ∏Å",IDC_RADIO_OKX,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,51,65,45,10
+    CONTROL         "ÂÖ∂‰ªñÔºàÈúÄË¶ÅÂâçÁºÄÔºâ",IDC_RADIO_OTHER,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,100,65,68,10
 END
 
-IDD_MANAGER_DIALOG DIALOGEX 0, 0, 214, 126
+IDD_MANAGER_DIALOG DIALOGEX 0, 0, 214, 182
 STYLE DS_SETFONT | WS_MAXIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
-CAPTION "π…∆±π‹¿Ì"
-FONT 9, "Œ¢»Ì—≈∫⁄", 400, 0, 0x0
+CAPTION "ËÇ°Á•®ÁÆ°ÁêÜ"
+FONT 9, "ÂæÆËΩØÈõÖÈªë", 400, 0, 0x0
 BEGIN
-    DEFPUSHBUTTON   "»∑∂®",IDOK,115,105,45,14
-    PUSHBUTTON      "»°œ˚",IDCANCEL,166,105,45,14
-    PUSHBUTTON      "ÃÌº”",IDC_MGR_ADD_BTN,17,102,35,14
-    PUSHBUTTON      "…æ≥˝",IDC_MGR_DEL_BTN,66,102,35,14
-    CONTROL         "»´ÃÏ∏¸–¬",IDC_FULL_DAY_CHECK,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,118,19,59,10
-    GROUPBOX        "≈‰÷√",IDC_STATIC,112,7,98,48
-    CONTROL         "œ‘ æπ…∆±√˚≥∆",IDC_SHOW_STOCK_NAME_CHECK,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,118,31,59,10
-    CONTROL         "’«µ¯—’…´±Í ∂",IDC_COLOR_WITH_PRICE_CHECK,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,118,43,59,10
-    GROUPBOX        "π…∆±«Âµ•",IDC_STATIC,7,7,103,112
-    LISTBOX         IDC_MGR_LIST,9,18,99,81,LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "øÌ∂»",IDC_STATIC,118,67,17,8
-    EDITTEXT        IDC_KLINE_HEIGHT_EDIT,138,81,40,12,ES_AUTOHSCROLL | ES_NUMBER
-    LTEXT           "∏ﬂ∂»",IDC_STATIC,118,83,17,8
-    GROUPBOX        "◊ﬂ ∆Õº",IDC_STATIC,112,55,98,44
-    EDITTEXT        IDC_KLINE_WIDTH_EDIT,138,66,40,12,ES_AUTOHSCROLL | ES_NUMBER
+    DEFPUSHBUTTON   "Á°ÆÂÆö",IDOK,115,161,45,14
+    PUSHBUTTON      "ÂèñÊ∂à",IDCANCEL,166,161,45,14
+    PUSHBUTTON      "Ê∑ªÂä†",IDC_MGR_ADD_BTN,17,158,35,14
+    PUSHBUTTON      "Âà†Èô§",IDC_MGR_DEL_BTN,66,158,35,14
+    CONTROL         "ÂÖ®Â§©Êõ¥Êñ∞",IDC_FULL_DAY_CHECK,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,118,19,59,10
+    GROUPBOX        "ÈÖçÁΩÆ",IDC_STATIC,112,7,98,60
+    CONTROL         "ÊòæÁ§∫ËÇ°Á•®ÂêçÁß∞",IDC_SHOW_STOCK_NAME_CHECK,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,118,31,59,10
+    CONTROL         "Ê∂®Ë∑åÈ¢úËâ≤Ê†áËØÜ",IDC_COLOR_WITH_PRICE_CHECK,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,118,43,59,10
+    LTEXT           "‰ª∑Ê†ºÂ∞èÊï∞",IDC_STATIC,118,56,35,8
+    COMBOBOX        IDC_PRICE_DECIMAL_COMBO,156,54,48,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    GROUPBOX        "ËÇ°Á•®Ê∏ÖÂçï",IDC_STATIC,7,7,103,168
+    LISTBOX         IDC_MGR_LIST,9,18,99,137,LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
+    GROUPBOX        "ÊòæÁ§∫Ê®°Âºè",IDC_STATIC,112,67,98,44
+    COMBOBOX        IDC_DISPLAY_MODE_COMBO,118,78,86,50,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "ËΩÆÊí≠Èó¥Èöî",IDC_STATIC,118,95,35,8
+    EDITTEXT        IDC_CAROUSEL_INTERVAL_EDIT,156,93,30,12,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "Áßí",IDC_STATIC,189,95,10,8
+    LTEXT           "ÂÆΩÂ∫¶",IDC_STATIC,118,123,17,8
+    EDITTEXT        IDC_KLINE_HEIGHT_EDIT,138,137,40,12,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "È´òÂ∫¶",IDC_STATIC,118,139,17,8
+    GROUPBOX        "Ëµ∞ÂäøÂõæ",IDC_STATIC,112,111,98,44
+    EDITTEXT        IDC_KLINE_WIDTH_EDIT,138,122,40,12,ES_AUTOHSCROLL | ES_NUMBER
 END
 
 
@@ -174,8 +184,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,4,1,1
- PRODUCTVERSION 1,4,1,1
+ FILEVERSION STOCK_VERSION_RC
+ PRODUCTVERSION STOCK_VERSION_RC
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -191,12 +201,12 @@ BEGIN
         BLOCK "080404b0"
         BEGIN
             VALUE "CompanyName", "By CListery"
-            VALUE "FileVersion", "1.4.1.1"
+            VALUE "FileVersion", STOCK_VERSION_RC_STR
             VALUE "InternalName", "Stock.dll"
             VALUE "LegalCopyright", "Copyright (C) By CListery. All rights reserved."
             VALUE "OriginalFilename", "Stock.dll"
             VALUE "ProductName", "Stock Plugin for TrafficMonitor"
-            VALUE "ProductVersion", "1.4.1.1"
+            VALUE "ProductVersion", STOCK_VERSION_RC_STR
         END
     END
     BLOCK "VarFileInfo"
@@ -215,8 +225,8 @@ IDR_MENU1 MENU
 BEGIN
     POPUP "1"
     BEGIN
-        MENUITEM "π‹¿Ìπ…∆±¡–±Ì(&O)...",               ID_OPTIONS
-        MENUITEM "∏¸–¬π…∆±–≈œ¢(&U)",                  ID_UPDATE
+        MENUITEM "ÁÆ°ÁêÜËÇ°Á•®ÂàóË°®(&O)...",               ID_OPTIONS
+        MENUITEM "Êõ¥Êñ∞ËÇ°Á•®‰ø°ÊÅØ(&U)",                  ID_UPDATE
     END
 END
 
@@ -238,78 +248,92 @@ IDI_STOCK               ICON                    "res\\icon.ico"
 
 STRINGTABLE
 BEGIN
-    IDS_PLUGIN_NAME         "π…∆±≤Âº˛"
-    IDS_PLUGIN_DESCRIPTION  "”√”⁄TrafficMonitorµƒπ…∆±≤Âº˛°£"
-    IDS_PLUGIN_ITEM_NAME    "π…∆±"
-    IDS_MENU_STOCK_MANAGE   "π‹¿Ìπ…∆±¡–±Ì(&O)..."
-    IDS_MENU_UPDATE_STOCK   "∏¸–¬π…∆±–≈œ¢(&U)"
-    IDS_ADD_STOCK           "ÃÌº”π…∆±"
-    IDS_EDIT_STOCK          "±‡º≠π…∆±"
-    IDS_CHANGE_STOCK_TIP    "∏¸–¬π…∆±¡–±Ì∫Û–Ë“™÷ÿ–¬∆Ù∂ØTrafficMonitor≤≈ƒ‹…˙–ß°£"
-    IDS_STOCK_NUM_LIMIT_WARNING "π…∆± ˝¡ø“—¥ÔµΩ…œœﬁ£°"
+    IDS_PLUGIN_NAME         "ËÇ°Á•®Êèí‰ª∂"
+    IDS_PLUGIN_DESCRIPTION  "Áî®‰∫éTrafficMonitorÁöÑËÇ°Á•®Êèí‰ª∂„ÄÇ"
+    IDS_PLUGIN_ITEM_NAME    "ËÇ°Á•®"
+    IDS_MENU_STOCK_MANAGE   "ÁÆ°ÁêÜËÇ°Á•®ÂàóË°®(&O)..."
+    IDS_MENU_UPDATE_STOCK   "Êõ¥Êñ∞ËÇ°Á•®‰ø°ÊÅØ(&U)"
+    IDS_ADD_STOCK           "Ê∑ªÂä†ËÇ°Á•®"
+    IDS_EDIT_STOCK          "ÁºñËæëËÇ°Á•®"
+    IDS_CHANGE_STOCK_TIP    "Êõ¥Êñ∞ËÇ°Á•®ÂàóË°®ÂêéÈúÄË¶ÅÈáçÊñ∞ÂêØÂä®TrafficMonitorÊâçËÉΩÁîüÊïà„ÄÇ"
+    IDS_STOCK_NUM_LIMIT_WARNING "ËÇ°Á•®Êï∞ÈáèÂ∑≤ËææÂà∞‰∏äÈôêÔºÅ"
+    IDS_LOAD_FAIL           "Âä†ËΩΩÂ§±Ë¥•"
+    IDS_LOADING             "Âä†ËΩΩ‰∏≠..."
 END
 
 STRINGTABLE
 BEGIN
-    IDS_UNSUPPORT_SHOW_KLINE_STOCK_TIP "‘›≤ª÷ß≥÷≥˝Aπ…Õ‚µƒKœﬂ◊ﬂ ∆£°"
-    IDS_LOAD_FAIL           "º”‘ÿ ß∞‹"
-    IDS_LOADING             "º”‘ÿ÷–"
+    IDS_CHANGE_SHOW_STOCK_NAME_TIP "‰øÆÊîπÈöêËóèÊàñÊòæÁ§∫ËÇ°Á•®ÂêçÁß∞ÈúÄË¶ÅÈáçÊñ∞ÂêØÂä®TrafficMonitorÊâçËÉΩÁîüÊïà„ÄÇ"
+    IDS_UNSUPPORT_SHOW_KLINE_STOCK_TIP "ÊöÇ‰∏çÊîØÊåÅÈô§AËÇ°Â§ñÁöÑKÁ∫øËµ∞ÂäøÔºÅ"
+    IDS_DISPLAY_MODE_SHOWALL    "ÊòæÁ§∫ÊâÄÊúâ"
+    IDS_DISPLAY_MODE_CAROUSEL   "ËΩÆÊí≠ÊòæÁ§∫"
+    IDS_DISPLAY_MODE_MANUAL     "ÊâãÂä®ÈÄâÊã©ÔºàÂèåÂáªÂàáÊç¢Ôºâ"
+    IDS_DISPLAY_MODE_SMART      "Êô∫ËÉΩÊ®°Âºè"
 END
 
-#endif    // ÷–Œƒ(ºÚÃÂ£¨÷–π˙) resources
+#endif    // ‰∏≠Êñá(ÁÆÄ‰ΩìÔºå‰∏≠ÂõΩ) resources
 /////////////////////////////////////////////////////////////////////////////
 
 
 /////////////////////////////////////////////////////////////////////////////
-// ”¢”Ô(√¿π˙) resources
+// Ëã±ËØ≠(ÁæéÂõΩ) resources
 
 #if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
-#pragma code_page(1252)
 
 /////////////////////////////////////////////////////////////////////////////
 //
 // Dialog
 //
 
-IDD_MANAGER_DIALOG DIALOGEX 0, 0, 214, 126
+IDD_MANAGER_DIALOG DIALOGEX 0, 0, 214, 182
 STYLE DS_SETFONT | WS_MAXIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
 CAPTION "Stock Manage"
 FONT 9, "Segoe UI", 400, 0, 0x0
 BEGIN
-    DEFPUSHBUTTON   "OK",IDOK,115,105,45,14
-    PUSHBUTTON      "Cancel",IDCANCEL,166,105,45,14
-    PUSHBUTTON      "Add",IDC_MGR_ADD_BTN,17,102,35,14
-    PUSHBUTTON      "Remove",IDC_MGR_DEL_BTN,66,102,35,14
+    DEFPUSHBUTTON   "OK",IDOK,115,161,45,14
+    PUSHBUTTON      "Cancel",IDCANCEL,166,161,45,14
+    PUSHBUTTON      "Add",IDC_MGR_ADD_BTN,17,158,35,14
+    PUSHBUTTON      "Remove",IDC_MGR_DEL_BTN,66,158,35,14
     CONTROL         "All day updates",IDC_FULL_DAY_CHECK,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,118,19,69,10
-    GROUPBOX        "Configure",IDC_STATIC,112,7,98,48
+    GROUPBOX        "Configure",IDC_STATIC,112,7,98,60
     CONTROL         "Show stock name",IDC_SHOW_STOCK_NAME_CHECK,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,118,31,69,10
     CONTROL         "Show colors",IDC_COLOR_WITH_PRICE_CHECK,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,118,43,69,10
-    GROUPBOX        "Stock list",IDC_STATIC,7,7,103,112
-    LISTBOX         IDC_MGR_LIST,9,18,99,81,LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Width",IDC_STATIC,118,67,22,8
-    EDITTEXT        IDC_KLINE_HEIGHT_EDIT,145,81,40,12,ES_AUTOHSCROLL | ES_NUMBER
-    LTEXT           "Height",IDC_STATIC,118,83,22,8
-    GROUPBOX        "K-Line",IDC_STATIC,112,55,98,44
-    EDITTEXT        IDC_KLINE_WIDTH_EDIT,145,66,40,12,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "Decimals",IDC_STATIC,118,56,35,8
+    COMBOBOX        IDC_PRICE_DECIMAL_COMBO,156,54,48,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    GROUPBOX        "Stock list",IDC_STATIC,7,7,103,168
+    LISTBOX         IDC_MGR_LIST,9,18,99,137,LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
+    GROUPBOX        "Display Mode",IDC_STATIC,112,67,98,44
+    COMBOBOX        IDC_DISPLAY_MODE_COMBO,118,78,86,50,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Interval",IDC_STATIC,118,95,28,8
+    EDITTEXT        IDC_CAROUSEL_INTERVAL_EDIT,150,93,30,12,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "s",IDC_STATIC,183,95,8,8
+    LTEXT           "Width",IDC_STATIC,118,123,22,8
+    EDITTEXT        IDC_KLINE_HEIGHT_EDIT,145,137,40,12,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "Height",IDC_STATIC,118,139,22,8
+    GROUPBOX        "K-Line",IDC_STATIC,112,111,98,44
+    EDITTEXT        IDC_KLINE_WIDTH_EDIT,145,122,40,12,ES_AUTOHSCROLL | ES_NUMBER
 END
 
-IDD_OPTIONS_DIALOG DIALOGEX 0, 0, 213, 90
+IDD_OPTIONS_DIALOG DIALOGEX 0, 0, 213, 118
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Stock"
 FONT 9, "Segoe UI", 400, 0, 0x0
 BEGIN
-    DEFPUSHBUTTON   "OK",IDOK,101,69,50,14
-    PUSHBUTTON      "Cancel",IDCANCEL,156,69,50,14
+    DEFPUSHBUTTON   "OK",IDOK,101,97,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,156,97,50,14
     LTEXT           "Code:",IDC_CODE_LABEL,7,9,28,8
     EDITTEXT        IDC_CODE_EDIT,37,7,169,12,ES_AUTOHSCROLL
-    GROUPBOX        "Stock type",IDC_STATIC,7,23,199,42
-    CONTROL         "Shenzheng",IDC_RADIO_SZ,"Button",BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP,15,35,52,10
-    CONTROL         "Ganggu",IDC_RADIO_HK,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,68,35,41,10
-    CONTROL         "Beijiaosuo",IDC_RADIO_BJ,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,111,35,50,10
-    CONTROL         "Shangzheng",IDC_RADIO_SH,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,15,50,58,10
-    CONTROL         "Meigu",IDC_RADIO_GB,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,164,35,32,10
-    CONTROL         "Other (prefix required)",IDC_RADIO_OTHER,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,76,50,96,10
+    LTEXT           "Alias:",IDC_STATIC,7,25,28,8
+    EDITTEXT        IDC_ALIAS_EDIT,37,23,169,12,ES_AUTOHSCROLL
+    GROUPBOX        "Stock type",IDC_STATIC,7,39,199,54
+    CONTROL         "Shenzheng",IDC_RADIO_SZ,"Button",BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP,15,51,52,10
+    CONTROL         "Ganggu",IDC_RADIO_HK,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,68,51,41,10
+    CONTROL         "Beijiaosuo",IDC_RADIO_BJ,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,111,51,50,10
+    CONTROL         "Shangzheng",IDC_RADIO_SH,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,15,66,58,10
+    CONTROL         "Meigu",IDC_RADIO_GB,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,164,51,32,10
+    CONTROL         "OKX Crypto",IDC_RADIO_OKX,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,76,66,50,10
+    CONTROL         "Other",IDC_RADIO_OTHER,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,130,66,68,10
 END
 
 
@@ -412,17 +436,23 @@ BEGIN
     IDS_EDIT_STOCK          "Edit Stock"
     IDS_CHANGE_STOCK_TIP    "It is required to restart TrafficMonitor to take effect after the stock list is updated."
     IDS_STOCK_NUM_LIMIT_WARNING "The number of stocks has reached limit!"
+    IDS_LOAD_FAIL           "Load failed"
+    IDS_LOADING             "Loading..."
 END
 
 STRINGTABLE
 BEGIN
-    IDS_UNSUPPORT_SHOW_KLINE_STOCK_TIP 
+    IDS_CHANGE_SHOW_STOCK_NAME_TIP
+                            "To change the hiding or displaying of stock names, you need to restart TrafficMonitor to make it take effect."
+    IDS_UNSUPPORT_SHOW_KLINE_STOCK_TIP
                             "K-line trends other than A-shares are not supported yet!"
-    IDS_LOAD_FAIL           "Load Fail"
-    IDS_LOADING             "Loading"
+    IDS_DISPLAY_MODE_SHOWALL    "Show All"
+    IDS_DISPLAY_MODE_CAROUSEL   "Carousel"
+    IDS_DISPLAY_MODE_MANUAL     "Manual"
+    IDS_DISPLAY_MODE_SMART      "Smart"
 END
 
-#endif    // ”¢”Ô(√¿π˙) resources
+#endif    // Ëã±ËØ≠(ÁæéÂõΩ) resources
 /////////////////////////////////////////////////////////////////////////////
 
 

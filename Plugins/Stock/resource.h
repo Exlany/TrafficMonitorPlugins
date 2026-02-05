@@ -19,6 +19,11 @@
 #define IDS_UNSUPPORT_SHOW_KLINE_STOCK_TIP 112
 #define IDS_LOAD_FAIL                   113
 #define IDS_LOADING                     114
+#define IDS_CHANGE_SHOW_STOCK_NAME_TIP  115
+#define IDS_DISPLAY_MODE_SHOWALL        116
+#define IDS_DISPLAY_MODE_CAROUSEL       117
+#define IDS_DISPLAY_MODE_MANUAL         118
+#define IDS_DISPLAY_MODE_SMART          119
 #define IDC_CODE_EDIT                   1003
 #define IDC_UPDATE_BUTTON               1004
 #define IDC_FULL_DAY_CHECK              1005
@@ -46,6 +51,11 @@
 #define IDC_IDC_KLINE_HEIGHT_EDIT       1027
 #define IDC_KLINE_HEIGHT_EDIT           1027
 #define IDC_EDIT3                       1028
+#define IDC_PRICE_DECIMAL_COMBO         1029
+#define IDC_ALIAS_EDIT                  1030
+#define IDC_DISPLAY_MODE_COMBO          1031
+#define IDC_CAROUSEL_INTERVAL_EDIT      1032
+#define IDC_RADIO_OKX                   1033
 #define ID_SETTINGS                     40003
 #define ID_UPDATE                       40004
 #define ID_OPTIONS                      40005

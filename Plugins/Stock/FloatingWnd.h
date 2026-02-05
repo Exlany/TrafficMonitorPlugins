@@ -28,6 +28,9 @@ protected:
 private:
     static UINT NetworkThreadProc(LPVOID pParam); // 线程函数
     CPoint Stock2Point(int x, int y, int w, int h, float unitY, const STOCK::TimelinePoint &item, const STOCK::Price prevClosePrice);
+    void DrawVolumeChart(CDC *pDC, const std::vector<STOCK::TimelinePoint> &timelinePoint,
+                         const std::vector<CPoint> &dataPoints, STOCK::Price prevClosePrice,
+                         int volumeTop, int volumeH, int w);
 
     CTransparentWnd m_CTransparentWnd;
     std::wstring m_stock_id;

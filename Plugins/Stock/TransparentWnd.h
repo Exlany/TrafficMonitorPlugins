@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <afxwin.h>
 
 class CTransparentWnd : public CWnd

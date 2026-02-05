@@ -23,7 +23,9 @@ using namespace STOCK;
 
 void STOCK::StockMarket::LoadRealtimeDataByJson(std::string json)
 {
-  ClearRealtimeData();
+  std::lock_guard<std::mutex> lock(Stock::Instance().m_stockDataMutex);
+  // 只清除普通股票数据，不清除OKX数据
+  ClearRealtimeData(false);
 
   if (json == "")
   {
@@ -53,9 +55,11 @@ void STOCK::StockMarket::LoadRealtimeDataByJson(std::string json)
       continue;
     }
 
-    std::wstring key = CCommon::StrToUnicode(item_arr[0].c_str());
+    // 根据系统代码页确定是否为UTF-8
+    bool is_utf8 = (g_data.m_system_code_page == 65001);
+    std::wstring key = CCommon::StrToUnicode(item_arr[0].c_str(), is_utf8);
     auto stockData = getStock(key);
-    stockData->info.code = CCommon::StrToUnicode(item_arr[0].c_str());
+    stockData->info.code = CCommon::StrToUnicode(item_arr[0].c_str(), is_utf8);
 
     stockData->info.is_ok = item_arr.size() >= 2;
 
@@ -69,7 +73,7 @@ void STOCK::StockMarket::LoadRealtimeDataByJson(std::string json)
 
     std::vector<std::string> data_arr = CCommon::split(data, ",");
 
-    stockData->info.displayName = CCommon::StrToUnicode(data_arr[0].c_str());
+    stockData->info.displayName = CCommon::StrToUnicode(data_arr[0].c_str(), is_utf8);
 
     stockData->realTimeData.Load(key, data_arr);
   }
@@ -99,14 +103,21 @@ void STOCK::RealTimeData::Load(std::wstring key, std::vector<std::string> data_a
   {
     LoadHK(data_arr, data_size);
   }
+  else if (key.find(kMGI) == 0)
+  {
+    LoadINT(data_arr, data_size);
+  }
 
   if (currentPrice > 0 && prevClosePrice > 0)
   {
     char buff[32];
-    sprintf_s(buff, "%.2f", currentPrice);
+    if (g_data.m_setting_data.m_price_decimal == 2)
+      sprintf_s(buff, "%.2f", currentPrice);
+    else
+      sprintf_s(buff, "%.3f", currentPrice);
     displayPrice = CCommon::StrToUnicode(buff);
 
-    sprintf_s(buff, "%.2f%%", ((currentPrice - prevClosePrice) / prevClosePrice * 100));
+    sprintf_s(buff, "%+.2f%%", ((currentPrice - prevClosePrice) / prevClosePrice * 100));
     displayFluctuation = CCommon::StrToUnicode(buff);
   }
 }
@@ -197,6 +208,22 @@ void STOCK::RealTimeData::LoadHK(std::vector<std::string> data, size_t size)
   turnover = {convert<Price>(data[11])};
 }
 
+void STOCK::RealTimeData::LoadINT(std::vector<std::string> data, size_t size)
+{
+  // 国际指数/期货格式: 名称,当前价,涨跌点数,涨跌幅%
+  if (size < 4)
+  {
+    return;
+  }
+  currentPrice = {convert<Price>(data[1])};
+  Price changePoints = {convert<Price>(data[2])};
+  // 通过当前价和涨跌点数反推昨收价
+  prevClosePrice = currentPrice - changePoints;
+  openPrice = prevClosePrice;
+  highPrice = currentPrice;
+  lowPrice = currentPrice;
+}
+
 void STOCK::StockMarket::LoadTimelineDataByJson(std::wstring stock_id, CString *pData)
 {
   auto data = g_data.GetStockData(stock_id);
@@ -217,7 +244,7 @@ std::wstring STOCK::StockData::GetCurrentDisplay(bool include_name) const
   if (info.is_ok)
   {
     if (include_name)
-      wss << info.displayName << ": ";
+      wss << GetDisplayName() << ": ";
     wss << realTimeData.displayPrice << ' ' << realTimeData.displayFluctuation;
   }
   else
@@ -225,6 +252,18 @@ std::wstring STOCK::StockData::GetCurrentDisplay(bool include_name) const
     wss << info.code + L" " + g_data.StringRes(IDS_LOAD_FAIL).GetString();
   }
   return wss.str();
+}
+
+std::wstring STOCK::StockData::GetDisplayName() const
+{
+  // 优先使用自定义别名
+  auto it = g_data.m_setting_data.m_stock_aliases.find(info.code);
+  if (it != g_data.m_setting_data.m_stock_aliases.end() && !it->second.empty())
+  {
+    return it->second;
+  }
+  // 其次使用智能简称
+  return CCommon::SmartShortName(info.displayName);
 }
 
 static Volume GetJsonVolume(yyjson_val *obj, const char *key)
@@ -268,6 +307,14 @@ static Price GetJsonPrice(yyjson_val *obj, const char *key)
         {
           return static_cast<Price>(yyjson_get_real(val));
         }
+        else if (yyjson_is_sint(val))
+        {
+          return static_cast<Price>(yyjson_get_sint(val));
+        }
+        else if (yyjson_is_uint(val))
+        {
+          return static_cast<Price>(yyjson_get_uint(val));
+        }
         else if (yyjson_is_str(val))
         {
           return static_cast<Price>(std::stod(yyjson_get_str(val)));
@@ -295,12 +342,14 @@ void STOCK::StockData::addTimelinePoint(const CString &json_data)
     yyjson_val *root = yyjson_doc_get_root(doc);
     if (root == nullptr)
     {
+      yyjson_doc_free(doc);
       return;
     }
 
     yyjson_val *result = yyjson_obj_get(root, "result");
     if (result == nullptr)
     {
+      yyjson_doc_free(doc);
       return;
     }
 
@@ -323,5 +372,125 @@ void STOCK::StockData::addTimelinePoint(const CString &json_data)
         }
       }
     }
+    yyjson_doc_free(doc);
   }
+}
+
+void STOCK::StockMarket::LoadOKXDataByJson(const std::wstring& code, const std::string& json)
+{
+  if (json.empty())
+  {
+    CCommon::WriteLog("OKX Response is EMPTY!", g_data.m_log_path.c_str());
+    return;
+  }
+
+  yyjson_doc *doc = yyjson_read(json.c_str(), json.size(), 0);
+  if (doc == nullptr)
+  {
+    CCommon::WriteLog("OKX JSON parse failed!", g_data.m_log_path.c_str());
+    return;
+  }
+
+  yyjson_val *root = yyjson_doc_get_root(doc);
+  if (root == nullptr)
+  {
+    yyjson_doc_free(doc);
+    return;
+  }
+
+  // 检查返回码
+  yyjson_val *codeVal = yyjson_obj_get(root, "code");
+  if (codeVal != nullptr && yyjson_is_str(codeVal))
+  {
+    const char* codeStr = yyjson_get_str(codeVal);
+    if (strcmp(codeStr, "0") != 0)
+    {
+      CCommon::WriteLog("OKX API error!", g_data.m_log_path.c_str());
+      yyjson_doc_free(doc);
+      return;
+    }
+  }
+
+  yyjson_val *dataArr = yyjson_obj_get(root, "data");
+  if (dataArr == nullptr || !yyjson_is_arr(dataArr))
+  {
+    yyjson_doc_free(doc);
+    return;
+  }
+
+  yyjson_val *data = yyjson_arr_get_first(dataArr);
+  if (data == nullptr)
+  {
+    yyjson_doc_free(doc);
+    return;
+  }
+
+  std::lock_guard<std::mutex> lock(Stock::Instance().m_stockDataMutex);
+  auto stockData = getStock(code);
+  stockData->info.code = code;
+  stockData->info.is_ok = true;
+
+  // 从 okx_BTC-USDT 提取显示名称 BTC-USDT
+  std::wstring instId = code.substr(4);
+  // 简化显示名称，如 BTC-USDT -> BTC
+  size_t dashPos = instId.find(L'-');
+  if (dashPos != std::wstring::npos)
+  {
+    stockData->info.displayName = instId.substr(0, dashPos);
+  }
+  else
+  {
+    stockData->info.displayName = instId;
+  }
+
+  // 解析价格数据
+  // last: 最新成交价
+  // open24h: 24小时开盘价（作为昨收价）
+  // high24h: 24小时最高价
+  // low24h: 24小时最低价
+  // vol24h: 24小时成交量
+  stockData->realTimeData.currentPrice = GetJsonPrice(data, "last");
+  stockData->realTimeData.prevClosePrice = GetJsonPrice(data, "open24h");
+  stockData->realTimeData.openPrice = GetJsonPrice(data, "open24h");
+  stockData->realTimeData.highPrice = GetJsonPrice(data, "high24h");
+  stockData->realTimeData.lowPrice = GetJsonPrice(data, "low24h");
+  stockData->realTimeData.volume = GetJsonVolume(data, "vol24h");
+
+  // 计算显示价格和涨跌幅
+  Price currentPrice = stockData->realTimeData.currentPrice;
+  Price prevClosePrice = stockData->realTimeData.prevClosePrice;
+
+  if (currentPrice > 0 && prevClosePrice > 0)
+  {
+    char buff[32];
+    // 虚拟货币价格自适应显示：
+    // - 十万级别以上(>=100000): 整数显示
+    // - 万级别(>=10000): 1位小数
+    // - 千级别(>=1000): 2位小数
+    // - 百级别(>=100): 2位小数
+    // - 十级别(>=10): 3位小数
+    // - 个位级别(>=1): 4位小数
+    // - 小数级别(>=0.01): 6位小数
+    // - 极小值(<0.01): 8位小数
+    if (currentPrice >= 100000)
+      sprintf_s(buff, "%.0f", currentPrice);
+    else if (currentPrice >= 10000)
+      sprintf_s(buff, "%.1f", currentPrice);
+    else if (currentPrice >= 100)
+      sprintf_s(buff, "%.2f", currentPrice);
+    else if (currentPrice >= 10)
+      sprintf_s(buff, "%.3f", currentPrice);
+    else if (currentPrice >= 1)
+      sprintf_s(buff, "%.4f", currentPrice);
+    else if (currentPrice >= 0.01)
+      sprintf_s(buff, "%.6f", currentPrice);
+    else
+      sprintf_s(buff, "%.8f", currentPrice);
+    stockData->realTimeData.displayPrice = CCommon::StrToUnicode(buff);
+
+    sprintf_s(buff, "%+.2f%%", ((currentPrice - prevClosePrice) / prevClosePrice * 100));
+    stockData->realTimeData.displayFluctuation = CCommon::StrToUnicode(buff);
+  }
+
+  yyjson_doc_free(doc);
 }

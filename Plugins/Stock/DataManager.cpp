@@ -1,6 +1,7 @@
 ﻿#include "pch.h"
 #include "DataManager.h"
 #include "Common.h"
+#include "Stock.h"
 #include <vector>
 #include <sstream>
 #include "../utilities/IniHelper.h"
@@ -17,6 +18,11 @@ CDataManager::CDataManager()
     HDC hDC = ::GetDC(HWND_DESKTOP);
     m_dpi = GetDeviceCaps(hDC, LOGPIXELSY);
     ::ReleaseDC(HWND_DESKTOP, hDC);
+
+    // 检测系统默认代码页
+    // 936 = GBK (中文简体Windows默认)
+    // 65001 = UTF-8 (新版Windows可能使用)
+    m_system_code_page = GetACP();
 }
 
 CDataManager::~CDataManager()
@@ -31,6 +37,7 @@ CDataManager &CDataManager::Instance()
 
 void CDataManager::ResetText()
 {
+    std::lock_guard<std::mutex> lock(Stock::Instance().m_stockDataMutex);
     stockMarket.ClearRealtimeData();
 }
 
@@ -69,6 +76,24 @@ void CDataManager::LoadConfig(const std::wstring &config_dir)
     m_setting_data.m_color_with_price = ini.GetBool(L"config", L"color_with_price", true);
     m_setting_data.m_kline_width = ini.GetInt(L"config", L"kline_width", 450);
     m_setting_data.m_kline_height = ini.GetInt(L"config", L"kline_height", 210);
+    m_setting_data.m_price_decimal = ini.GetInt(L"config", L"price_decimal", 3);
+    m_setting_data.m_display_mode = static_cast<StockDisplayMode>(ini.GetInt(L"config", L"display_mode", 0));
+    m_setting_data.m_carousel_interval = ini.GetInt(L"config", L"carousel_interval", 5);
+    m_setting_data.m_check_update = ini.GetBool(L"config", L"check_update", true);
+
+    // 加载自定义别名
+    std::vector<std::wstring> alias_list;
+    ini.GetStringList(L"config", L"stock_aliases", alias_list, std::vector<std::wstring>{});
+    for (const auto& item : alias_list)
+    {
+        size_t pos = item.find(L'=');
+        if (pos != std::wstring::npos)
+        {
+            std::wstring code = item.substr(0, pos);
+            std::wstring alias = item.substr(pos + 1);
+            m_setting_data.m_stock_aliases[code] = alias;
+        }
+    }
 }
 
 void CDataManager::SaveConfig()
@@ -82,6 +107,22 @@ void CDataManager::SaveConfig()
         ini.WriteBool(L"config", L"color_with_price", m_setting_data.m_color_with_price);
         ini.WriteInt(L"config", L"kline_width", m_setting_data.m_kline_width);
         ini.WriteInt(L"config", L"kline_height", m_setting_data.m_kline_height);
+        ini.WriteInt(L"config", L"price_decimal", m_setting_data.m_price_decimal);
+        ini.WriteInt(L"config", L"display_mode", static_cast<int>(m_setting_data.m_display_mode));
+        ini.WriteInt(L"config", L"carousel_interval", m_setting_data.m_carousel_interval);
+        ini.WriteBool(L"config", L"check_update", m_setting_data.m_check_update);
+
+        // 保存自定义别名
+        std::vector<std::wstring> alias_list;
+        for (const auto& pair : m_setting_data.m_stock_aliases)
+        {
+            if (!pair.second.empty())
+            {
+                alias_list.push_back(pair.first + L"=" + pair.second);
+            }
+        }
+        ini.WriteStringList(L"config", L"stock_aliases", alias_list);
+
         ini.Save();
     }
 }
@@ -172,20 +213,47 @@ void CDataManager::RequestRealtimeData()
 {
     TRACE(L"RequestRealtimeData...\n");
     std::vector<std::wstring> codes = m_setting_data.m_stock_codes;
-    // https://hq.sinajs.cn/?_=0.1155744778269292&list=sz002497
-    std::wstring url{L"https://hq.sinajs.cn/?"};
-    std::vector<std::wstring> params;
-    params.push_back(L"_=" + std::to_wstring(generateRandomDouble()));
-    params.push_back(L"list=" + CCommon::vectorJoinString(codes, L","));
 
-    url += CCommon::vectorJoinString(params, L"&");
-    CString strHeaders = _T("Referer: https://finance.sina.com.cn");
-    CCommon::WriteLog(url.c_str(), g_data.m_log_path.c_str());
+    // 分离 OKX 虚拟货币代码和普通股票代码
+    std::vector<std::wstring> okx_codes;
+    std::vector<std::wstring> stock_codes;
 
-    std::string Stock_data;
-    if (CCommon::GetURL(url, Stock_data, false, WEB_USERAGENT, strHeaders, strHeaders.GetLength()))
+    for (const auto& code : codes)
     {
-        stockMarket.LoadRealtimeDataByJson(Stock_data);
+        if (code.find(L"okx_") == 0)
+        {
+            okx_codes.push_back(code);
+        }
+        else
+        {
+            stock_codes.push_back(code);
+        }
+    }
+
+    // 请求普通股票数据
+    if (!stock_codes.empty())
+    {
+        // https://hq.sinajs.cn/?_=0.1155744778269292&list=sz002497
+        std::wstring url{L"https://hq.sinajs.cn/?"};
+        std::vector<std::wstring> params;
+        params.push_back(L"_=" + std::to_wstring(generateRandomDouble()));
+        params.push_back(L"list=" + CCommon::vectorJoinString(stock_codes, L","));
+
+        url += CCommon::vectorJoinString(params, L"&");
+        CString strHeaders = _T("Referer: https://finance.sina.com.cn");
+        CCommon::WriteLog(url.c_str(), g_data.m_log_path.c_str());
+
+        std::string Stock_data;
+        if (CCommon::GetURL(url, Stock_data, false, WEB_USERAGENT, strHeaders, strHeaders.GetLength()))
+        {
+            stockMarket.LoadRealtimeDataByJson(Stock_data);
+        }
+    }
+
+    // 请求 OKX 虚拟货币数据
+    for (const auto& code : okx_codes)
+    {
+        RequestOKXData(code);
     }
 }
 
@@ -240,5 +308,30 @@ void CDataManager::RequestTimelineData(std::wstring stock_id)
     {
         e->Delete();
         stockMarket.LoadTimelineDataByJson(stock_id, NULL);
+    }
+}
+
+void CDataManager::RequestOKXData(const std::wstring& code)
+{
+    try
+    {
+        TRACE(L"RequestOKXData: %s\n", code.c_str());
+
+        // 从 okx_BTC-USDT 提取交易对 BTC-USDT
+        std::wstring instId = code.substr(4); // 移除 "okx_" 前缀
+
+        // OKX API: https://www.okx.com/api/v5/market/ticker?instId=BTC-USDT
+        std::wstring url = L"https://www.okx.com/api/v5/market/ticker?instId=" + instId;
+        CCommon::WriteLog(url.c_str(), g_data.m_log_path.c_str());
+
+        std::string okx_data;
+        if (CCommon::GetURL(url, okx_data, true, WEB_USERAGENT, nullptr, 0))
+        {
+            stockMarket.LoadOKXDataByJson(code, okx_data);
+        }
+    }
+    catch (...)
+    {
+        CCommon::WriteLog(L"RequestOKXData failed", g_data.m_log_path.c_str());
     }
 }

@@ -1,0 +1,168 @@
+name: Cleanup Runner Resources
+
+on:
+  schedule:
+    # 每周日凌晨 2 点执行 (UTC)
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+
+jobs:
+  cleanup-artifacts:
+    name: Clean up old artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - name: Clean up old workflow artifacts
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const owner = context.repo.owner;
+          const repo = context.repo.repo;
+
+          // 设置清理策略：删除 90 天前的 artifacts
+          const daysToKeep = 90;
+          const cutoffDate = new Date();
+          cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+
+          // 获取所有 artifacts
+          const artifacts = await github.rest.actions.listArtifactsForRepo({
+            owner,
+            repo,
+            per_page: 100
+          });
+
+          let deletedCount = 0;
+          const artifactNames = [];
+
+          for (const artifact of artifacts.data.artifacts) {
+            const createdAt = new Date(artifact.created_at);
+            if (createdAt < cutoffDate) {
+              try {
+                await github.rest.actions.deleteArtifact({
+                  owner,
+                  repo,
+                  artifact_id: artifact.id
+                });
+                deletedCount++;
+                artifactNames.push(artifact.name);
+                console.log(`Deleted artifact: ${artifact.name} (created: ${artifact.created_at})`);
+              } catch (error) {
+                console.error(`Failed to delete artifact ${artifact.name}:`, error);
+              }
+            }
+          }
+
+          console.log(`[OK] Cleanup completed: ${deletedCount} artifacts deleted`);
+          console.log(`Deleted artifacts: ${artifactNames.join(', ') || 'None'}`);
+          return {
+            deletedCount,
+            cutoffDate: cutoffDate.toISOString(),
+            deletedArtifacts: artifactNames
+          };
+
+    - name: Clean up workflow runs
+      uses: Mattraks/delete-workflow-runs@v2
+      with:
+        token: ${{ github.token }}
+        repository: ${{ github.repository }}
+        retain_days: 90
+        keep_minimum_runs: 5
+        delete_workflow_pattern: "Build Stock Plugin,Cleanup Runner Resources"
+
+    - name: Summary
+      run: |
+        echo "## [OK] Runner Cleanup Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Completed Tasks:" >> $GITHUB_STEP_SUMMARY
+        echo "- [OK] Old artifacts (older than 90 days) have been deleted" >> $GITHUB_STEP_SUMMARY
+        echo "- [OK] Old workflow runs (older than 90 days) have been deleted" >> $GITHUB_STEP_SUMMARY
+        echo "- [OK] Kept minimum of 5 recent workflow runs" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Cleanup Benefits:" >> $GITHUB_STEP_SUMMARY
+        echo "- Recover disk space on GitHub" >> $GITHUB_STEP_SUMMARY
+        echo "- Improve workflow run performance" >> $GITHUB_STEP_SUMMARY
+        echo "- Easier to find recent workflow runs in UI" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Schedule:" >> $GITHUB_STEP_SUMMARY
+        echo "- Runs every Sunday at 2:00 AM UTC" >> $GITHUB_STEP_SUMMARY
+        echo "- Can also be triggered manually via workflow_dispatch" >> $GITHUB_STEP_SUMMARY
+
+  cleanup-cache:
+    name: Clean up GitHub caches
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - name: List GitHub caches
+      id: cache-list
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const caches = await github.rest.actions.getActionsCacheList({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            per_page: 100
+          });
+
+          let totalSize = 0;
+          const cacheInfo = [];
+
+          for (const cache of caches.data.actions_caches) {
+            totalSize += cache.size_in_bytes;
+            cacheInfo.push({
+              key: cache.key,
+              size: (cache.size_in_bytes / 1024 / 1024).toFixed(2) + ' MB',
+              created: cache.created_at
+            });
+          }
+
+          console.log(`Total caches: ${caches.data.total_count}`);
+          console.log(`Total size: ${(totalSize / 1024 / 1024).toFixed(2)} MB`);
+          console.log('CacheList:');
+
+          cacheInfo.forEach(cache => {
+            console.log(`- ${cache.key}: ${cache.size} (created: ${cache.created})`);
+          });
+
+          return {
+            totalCount: caches.data.total_count,
+            totalSizeMB: (totalSize / 1024 / 1024).toFixed(2),
+            caches: cacheInfo
+          };
+
+    - name: Delete specific old caches
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const caches = await github.rest.actions.getActionsCacheList({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            per_page: 100
+          });
+
+          const daysToKeep = 30;
+          const cutoffDate = new Date();
+          cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+
+          let deletedCount = 0;
+
+          for (const cache of caches.data.actions_caches) {
+            const createdAt = new Date(cache.created_at);
+            if (createdAt < cutoffDate) {
+              try {
+                await github.rest.actions.deleteActionsCacheById({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  cache_id: cache.id
+                });
+                deletedCount++;
+                console.log(`Deleted cache: ${cache.key} (created: ${cache.created_at})`);
+              } catch (error) {
+                console.error(`Failed to delete cache ${cache.key}:`, error);
+              }
+            }
+          }
+
+          console.log(`[OK] Cache cleanup completed: ${deletedCount} caches deleted`);
+          return { deletedCount };
