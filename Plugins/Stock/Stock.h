@@ -1,24 +1,19 @@
 ﻿#pragma once
-#include "Stock.h"
 #include "StockItem.h"
+#include "StockConstants.h"
 #include <string>
 #include "PluginInterface.h"
-#include "ManagerDialog.h"
 #include <map>
 #include <vector>
 #include <mutex>
+#include <shared_mutex>
+#include <memory>
+#include <atomic>
 
-constexpr auto kSH = L"sh";    // 上海
-constexpr auto kSZ = L"sz";    // 深圳
-constexpr auto kHK = L"rt_hk"; // 香港
-constexpr auto kMG = L"gb_";   // 美国个股
-constexpr auto kMGI = L"int_"; // 美国指数
-constexpr auto kBJ = L"bj";    // 北京
-constexpr auto kOKX = L"okx_"; // OKX虚拟货币
+// 使用 StockConstants 命名空间中的常量
+using namespace StockConstants;
 
-const std::vector<CString> StockTypeSet{kSH, kSZ, kHK, kMG, kMGI, kBJ, kOKX};
-
-#define Stock_ITEM_MAX 10
+class CManagerDialog;
 
 class Stock : public ITMPlugin
 {
@@ -53,9 +48,6 @@ public:
     size_t GetCurrentDisplayIndex() const { return m_current_display_index; }  // 获取当前显示的股票索引
     size_t GetSecondRowIndex();  // 获取第二行显示的股票索引
 
-public:
-    std::mutex m_stockDataMutex;
-
 private:
     static UINT ThreadCallback(LPVOID dwUser);
     static UINT CheckUpdateThread(LPVOID pParam);  // 更新检查线程
@@ -65,19 +57,20 @@ private:
 
 private:
     static Stock m_instance;
-    vector<StockItem> m_items;
+    std::vector<StockItem> m_items;
+    mutable std::shared_mutex m_itemsMutex;
 
-    bool m_is_thread_runing{};
+    std::atomic<bool> m_is_thread_running{};
     CManagerDialog *m_option_dlg{};         // 保存选项设置对话框的句柄
-    unsigned __int64 m_last_request_time{}; // 上次请求的时间
+    std::atomic<unsigned __int64> m_last_request_time{}; // 上次请求的时间
     CMenu m_menu;
 
     std::mutex m_wndMutex;
-    CFloatingWnd *m_pFloatingWnd;
+    std::unique_ptr<CFloatingWnd> m_pFloatingWnd;
 
     // 显示模式相关
-    int m_current_display_index{0};      // 当前显示的股票索引
-    time_t m_last_carousel_time{0};      // 上次轮播切换时间
+    std::atomic<int> m_current_display_index{0};      // 当前显示的股票索引
+    std::atomic<time_t> m_last_carousel_time{0};      // 上次轮播切换时间
 };
 
 #ifdef __cplusplus

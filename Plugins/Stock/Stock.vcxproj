@@ -264,9 +264,31 @@
     <ClInclude Include="pch.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Stock.h" />
+    <ClInclude Include="StockConstants.h" />
     <ClInclude Include="StockDef.h" />
     <ClInclude Include="StockItem.h" />
+    <ClInclude Include="StockMappings.h" />
+    <ClInclude Include="StockVersion.h" />
     <ClInclude Include="TransparentWnd.h" />
+    <ClInclude Include="Core\IConfigStore.h" />
+    <ClInclude Include="Core\IHttpClient.h" />
+    <ClInclude Include="Core\ILogger.h" />
+    <ClInclude Include="Core\IResourceProvider.h" />
+    <ClInclude Include="Domain\CStockCodeResolver.h" />
+    <ClInclude Include="Domain\CStockDataParser.h" />
+    <ClInclude Include="Domain\CStockRepository.h" />
+    <ClInclude Include="Domain\CStockSettings.h" />
+    <ClInclude Include="Infrastructure\CFileLogger.h" />
+    <ClInclude Include="Infrastructure\CIniConfigStore.h" />
+    <ClInclude Include="Infrastructure\CResourceCache.h" />
+    <ClInclude Include="Infrastructure\CUpdateService.h" />
+    <ClInclude Include="Infrastructure\CWinHttpClient.h" />
+    <ClInclude Include="Application\CDisplayManager.h" />
+    <ClInclude Include="Application\CNetworkService.h" />
+    <ClInclude Include="Application\CUpdateChecker.h" />
+    <ClInclude Include="Presentation\CStockItemRenderer.h" />
+    <ClInclude Include="Presentation\CTimelineRenderer.h" />
+    <ClInclude Include="Utils\StringUtils.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Common.cpp" />
@@ -285,7 +307,23 @@
     <ClCompile Include="Stock.cpp" />
     <ClCompile Include="StockDef.cpp" />
     <ClCompile Include="StockItem.cpp" />
+    <ClCompile Include="StockMappings.cpp" />
     <ClCompile Include="TransparentWnd.cpp" />
+    <ClCompile Include="Domain\CStockCodeResolver.cpp" />
+    <ClCompile Include="Domain\CStockRepository.cpp" />
+    <ClCompile Include="Domain\CStockSettings.cpp" />
+    <ClCompile Include="Infrastructure\CIniConfigStore.cpp" />
+    <ClCompile Include="Infrastructure\CResourceCache.cpp" />
+    <ClCompile Include="Infrastructure\CWinHttpClient.cpp" />
+    <ClCompile Include="Application\CDisplayManager.cpp" />
+    <ClCompile Include="Application\CUpdateChecker.cpp" />
+    <ClCompile Include="Presentation\CStockItemRenderer.cpp" />
+    <ClCompile Include="Presentation\CTimelineRenderer.cpp" />
+    <ClCompile Include="Domain\CStockDataParser.cpp" />
+    <ClCompile Include="Infrastructure\CFileLogger.cpp" />
+    <ClCompile Include="Infrastructure\CUpdateService.cpp" />
+    <ClCompile Include="Application\CNetworkService.cpp" />
+    <ClCompile Include="Utils\StringUtils.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Stock.rc" />

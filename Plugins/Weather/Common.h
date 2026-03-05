@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include <string>
+#include <atomic>
 class CCommon
 {
 public:
@@ -17,21 +18,24 @@ public:
 };
 
 
-//通过构造函数传递一个bool变量的引用，在构造时将其置为true，析构时置为false
+// RAII guard: sets an atomic<bool> flag to true on construction, false on destruction
 class CFlagLocker
 {
 public:
-    CFlagLocker(bool& flag)
+    explicit CFlagLocker(std::atomic<bool>& flag)
         : m_flag(flag)
     {
-        m_flag = true;
+        m_flag.store(true);
     }
 
     ~CFlagLocker()
     {
-        m_flag = false;
+        m_flag.store(false);
     }
 
+    CFlagLocker(const CFlagLocker&) = delete;
+    CFlagLocker& operator=(const CFlagLocker&) = delete;
+
 private:
-    bool& m_flag;
+    std::atomic<bool>& m_flag;
 };

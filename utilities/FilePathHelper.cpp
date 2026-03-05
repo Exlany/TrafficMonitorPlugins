@@ -23,21 +23,20 @@ namespace utilities
 
     std::wstring CFilePathHelper::GetFileName() const
     {
-        size_t index;
-        index = m_file_path.rfind('\\');
+        size_t index = m_file_path.find_last_of(L"\\/");
         if (index == std::wstring::npos)
-            index = m_file_path.rfind('/');
+            return m_file_path;
         return m_file_path.substr(index + 1);
     }
 
     std::wstring CFilePathHelper::GetFileNameWithoutExtension() const
     {
-        size_t index, index1;
-        index = m_file_path.rfind('.');
-        index1 = m_file_path.rfind('\\');
-        if (index1 == std::wstring::npos)
-            index1 = m_file_path.rfind('/');
-        return m_file_path.substr(index1 + 1, (index - index1 - 1));
+        size_t index = m_file_path.rfind('.');
+        size_t index1 = m_file_path.find_last_of(L"\\/");
+        size_t name_start = (index1 == std::wstring::npos) ? 0 : index1 + 1;
+        if (index == std::wstring::npos || index < name_start)
+            return m_file_path.substr(name_start);
+        return m_file_path.substr(name_start, index - name_start);
     }
 
     std::wstring CFilePathHelper::GetFolderName() const
@@ -58,23 +57,23 @@ namespace utilities
     {
         if (!m_file_path.empty() && (m_file_path.back() == L'\\' || m_file_path.back() == L'/'))
             return m_file_path;
-        size_t index;
-        index = m_file_path.rfind('\\');
+        size_t index = m_file_path.find_last_of(L"\\/");
         if (index == std::wstring::npos)
-            index = m_file_path.rfind('/');
+            return std::wstring();
         return m_file_path.substr(0, index + 1);
     }
 
     std::wstring CFilePathHelper::GetParentDir() const
     {
         std::wstring dir{ GetDir() };
-        size_t index;
-        if (!dir.empty() && (dir.back() == L'\\' || dir.back() == L'/'))
+        if (dir.empty())
+            return std::wstring();
+        if (dir.back() == L'\\' || dir.back() == L'/')
             dir.pop_back();
-        index = dir.rfind('\\');
+        size_t index = dir.find_last_of(L"\\/");
         if (index == std::wstring::npos)
-            index = dir.rfind('/');
-        return m_file_path.substr(0, index + 1);
+            return std::wstring();
+        return dir.substr(0, index + 1);
     }
 
     const std::wstring& CFilePathHelper::ReplaceFileExtension(const wchar_t * new_extension)

@@ -8,6 +8,11 @@
 #include "DataManager.h"
 #include "Common.h"
 
+using namespace StockConstants;
+
+// 支持的市场类型集合
+static const std::vector<CString> StockTypeSet{kSH, kSZ, kHK, kMG, kMGI, kBJ, kOKX, kBN, kFX, kHF};
+
 // COptionsDlg 对话框
 
 IMPLEMENT_DYNAMIC(COptionsDlg, CDialog)
@@ -20,10 +25,11 @@ COptionsDlg::COptionsDlg(const std::wstring& code, CWnd* pParent /*=nullptr*/)
     // 加载已有的别名
     if (!code.empty())
     {
-        auto it = g_data.m_setting_data.m_stock_aliases.find(code);
-        if (it != g_data.m_setting_data.m_stock_aliases.end())
+        SettingsSnapshot settings = g_data.GetSettingsSnapshot();
+        std::wstring alias = settings.GetAlias(code);
+        if (!alias.empty())
         {
-            m_stock_alias = it->second.c_str();
+            m_stock_alias = alias.c_str();
         }
     }
 }
@@ -34,7 +40,9 @@ COptionsDlg::~COptionsDlg()
 
 void COptionsDlg::EnableUpdateBtn(bool enable)
 {
-    ::EnableWindow(GetDlgItem(IDC_UPDATE_BUTTON)->GetSafeHwnd(), enable);
+    CWnd* pBtn = GetDlgItem(IDC_UPDATE_BUTTON);
+    if (pBtn != nullptr && pBtn->GetSafeHwnd() != NULL)
+        pBtn->EnableWindow(enable);
 }
 
 void COptionsDlg::DoDataExchange(CDataExchange* pDX)
@@ -181,12 +189,12 @@ int COptionsDlg::AutoDetectStockType(const CString& code)
         // 6位数字代码
         TCHAR firstChar = pureCode[0];
 
-        // 上证: 6开头
-        if (firstChar == _T('6'))
+        // 上证: 6开头(A股主板)、5开头(ETF/基金/债券)、9开头(B股)
+        if (firstChar == _T('6') || firstChar == _T('5') || firstChar == _T('9'))
             return 3; // 上证
 
-        // 深证: 0、2、3开头
-        if (firstChar == _T('0') || firstChar == _T('2') || firstChar == _T('3'))
+        // 深证: 0开头(主板)、2开头(B股)、3开头(创业板)、1开头(基金/债券)
+        if (firstChar == _T('0') || firstChar == _T('2') || firstChar == _T('3') || firstChar == _T('1'))
             return 0; // 深证
 
         // 北交所: 8、4开头
@@ -265,5 +273,5 @@ void COptionsDlg::OnBnClickedCancel()
 void COptionsDlg::OnRadioClickedStockTypes()
 {
     UpdateData(TRUE);
-    Log1("OnRadioClickedStockTypes: %d\n", m_radio_stock_types);
+    TRACE(L"OnRadioClickedStockTypes: %d\n", m_radio_stock_types);
 }

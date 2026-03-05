@@ -13,7 +13,7 @@ public:
 	CManagerDialog(CWnd* pParent = nullptr);   // 标准构造函数
 	virtual ~CManagerDialog();
 
-	SettingData m_data;
+	SettingsSnapshot m_data;
 
 // 对话框数据
 #ifdef AFX_DESIGN_TIME

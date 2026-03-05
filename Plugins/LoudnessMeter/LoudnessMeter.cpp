@@ -23,6 +23,7 @@ CLoudnessMeter::~CLoudnessMeter()
         pDevice->Release();
     if (pEnumerator != nullptr)
         pEnumerator->Release();
+    CoUninitialize();
 }
 
 CLoudnessMeter& CLoudnessMeter::Instance()
@@ -164,6 +165,20 @@ void CLoudnessMeter::DoDataAcquire()
 
 void CLoudnessMeter::InitDevice()
 {
+    // 释放旧的设备资源
+    if (pMeterInfo != nullptr)
+    {
+        pMeterInfo->Release();
+        pMeterInfo = nullptr;
+    }
+    if (pDevice != nullptr)
+    {
+        pDevice->Release();
+        pDevice = nullptr;
+    }
+
+    if (pEnumerator == nullptr)
+        return;
     pEnumerator->GetDefaultAudioEndpoint(eRender, eConsole, &pDevice);
     if (pDevice == nullptr)
         return;

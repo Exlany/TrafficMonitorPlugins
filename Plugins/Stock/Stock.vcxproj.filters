@@ -28,6 +28,21 @@
     <Filter Include="FloatingWnd">
       <UniqueIdentifier>{bc94a766-d2ab-42d5-9671-72960500d3d5}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Core">
+      <UniqueIdentifier>{a1b2c3d4-e5f6-7890-abcd-ef1234567890}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Domain">
+      <UniqueIdentifier>{b2c3d4e5-f6a7-8901-bcde-f12345678901}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Infrastructure">
+      <UniqueIdentifier>{c3d4e5f6-a7b8-9012-cdef-123456789012}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Application">
+      <UniqueIdentifier>{d4e5f6a7-b8c9-0123-defa-234567890123}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Presentation">
+      <UniqueIdentifier>{e5f6a7b8-c9d0-1234-efab-345678901234}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h">
@@ -63,8 +78,56 @@
     <ClInclude Include="StockDef.h">
       <Filter>DataManager</Filter>
     </ClInclude>
+    <ClInclude Include="StockMappings.h">
+      <Filter>DataManager</Filter>
+    </ClInclude>
     <ClInclude Include="TransparentWnd.h">
       <Filter>FloatingWnd</Filter>
+    </ClInclude>
+    <ClInclude Include="StockConstants.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="StockVersion.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\IConfigStore.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\IHttpClient.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\IResourceProvider.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Domain\CStockCodeResolver.h">
+      <Filter>Domain</Filter>
+    </ClInclude>
+    <ClInclude Include="Domain\CStockRepository.h">
+      <Filter>Domain</Filter>
+    </ClInclude>
+    <ClInclude Include="Domain\CStockSettings.h">
+      <Filter>Domain</Filter>
+    </ClInclude>
+    <ClInclude Include="Infrastructure\CIniConfigStore.h">
+      <Filter>Infrastructure</Filter>
+    </ClInclude>
+    <ClInclude Include="Infrastructure\CResourceCache.h">
+      <Filter>Infrastructure</Filter>
+    </ClInclude>
+    <ClInclude Include="Infrastructure\CWinHttpClient.h">
+      <Filter>Infrastructure</Filter>
+    </ClInclude>
+    <ClInclude Include="Application\CDisplayManager.h">
+      <Filter>Application</Filter>
+    </ClInclude>
+    <ClInclude Include="Application\CUpdateChecker.h">
+      <Filter>Application</Filter>
+    </ClInclude>
+    <ClInclude Include="Presentation\CStockItemRenderer.h">
+      <Filter>Presentation</Filter>
+    </ClInclude>
+    <ClInclude Include="Presentation\CTimelineRenderer.h">
+      <Filter>Presentation</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -95,8 +158,41 @@
     <ClCompile Include="StockDef.cpp">
       <Filter>DataManager</Filter>
     </ClCompile>
+    <ClCompile Include="StockMappings.cpp">
+      <Filter>DataManager</Filter>
+    </ClCompile>
     <ClCompile Include="TransparentWnd.cpp">
       <Filter>FloatingWnd</Filter>
+    </ClCompile>
+    <ClCompile Include="Domain\CStockCodeResolver.cpp">
+      <Filter>Domain</Filter>
+    </ClCompile>
+    <ClCompile Include="Domain\CStockRepository.cpp">
+      <Filter>Domain</Filter>
+    </ClCompile>
+    <ClCompile Include="Domain\CStockSettings.cpp">
+      <Filter>Domain</Filter>
+    </ClCompile>
+    <ClCompile Include="Infrastructure\CIniConfigStore.cpp">
+      <Filter>Infrastructure</Filter>
+    </ClCompile>
+    <ClCompile Include="Infrastructure\CResourceCache.cpp">
+      <Filter>Infrastructure</Filter>
+    </ClCompile>
+    <ClCompile Include="Infrastructure\CWinHttpClient.cpp">
+      <Filter>Infrastructure</Filter>
+    </ClCompile>
+    <ClCompile Include="Application\CDisplayManager.cpp">
+      <Filter>Application</Filter>
+    </ClCompile>
+    <ClCompile Include="Application\CUpdateChecker.cpp">
+      <Filter>Application</Filter>
+    </ClCompile>
+    <ClCompile Include="Presentation\CStockItemRenderer.cpp">
+      <Filter>Presentation</Filter>
+    </ClCompile>
+    <ClCompile Include="Presentation\CTimelineRenderer.cpp">
+      <Filter>Presentation</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

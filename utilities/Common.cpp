@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <fstream>
 #include <io.h>
+#include <vector>
 
 namespace utilities
 {
@@ -10,17 +11,15 @@ namespace utilities
         std::ifstream file{ file_path, std::ios::binary };
         if (file.fail())
             return false;
-        //»ñÈ¡ÎÄ¼þ³¤¶È
         file.seekg(0, file.end);
         size_t length = file.tellg();
         file.seekg(0, file.beg);
 
-        char* buff = new char[length];
-        file.read(buff, length);
+        std::vector<char> buff(length);
+        file.read(buff.data(), length);
         file.close();
 
-        contents_buff.assign(buff, length);
-        delete[] buff;
+        contents_buff.assign(buff.data(), length);
 
         return true;
     }
@@ -32,12 +31,16 @@ namespace utilities
         length = 0;
         if (file.fail())
             return nullptr;
-        //»ñÈ¡ÎÄ¼þ³¤¶È
         file.seekg(0, file.end);
         length = file.tellg();
         file.seekg(0, file.beg);
 
-        char* buff = new char[length];
+        char* buff = new (std::nothrow) char[length];
+        if (buff == nullptr)
+        {
+            length = 0;
+            return nullptr;
+        }
         file.read(buff, length);
         file.close();
 
@@ -47,9 +50,9 @@ namespace utilities
 
     void CCommon::GetFiles(const wchar_t* path, std::vector<std::wstring>& files)
     {
-        //ÎÄ¼þ¾ä±ú
+        //ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½
         intptr_t hFile = 0;
-        //ÎÄ¼þÐÅÏ¢
+        //ï¿½Ä¼ï¿½ï¿½ï¿½Ï¢
         _wfinddata_t fileinfo;
         if ((hFile = _wfindfirst(path, &fileinfo)) != -1)
         {
@@ -57,7 +60,7 @@ namespace utilities
             {
                 std::wstring file_name(fileinfo.name);
                 if (file_name != L"." && file_name != L"..")
-                    files.push_back(file_name);  //½«ÎÄ¼þÃû±£´æ(ºöÂÔ"."ºÍ"..")
+                    files.push_back(file_name);  //ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½(ï¿½ï¿½ï¿½ï¿½"."ï¿½ï¿½"..")
             } while (_wfindnext(hFile, &fileinfo) == 0);
         }
         _findclose(hFile);
@@ -69,30 +72,22 @@ namespace utilities
     {
         if (str == nullptr)
             return std::wstring();
-        std::wstring result;
-        int size;
-        size = MultiByteToWideChar((utf8 ? CP_UTF8 : CP_ACP), 0, str, -1, NULL, 0);
+        int size = MultiByteToWideChar((utf8 ? CP_UTF8 : CP_ACP), 0, str, -1, NULL, 0);
         if (size <= 0) return std::wstring();
-        wchar_t* str_unicode = new wchar_t[size + 1];
-        MultiByteToWideChar((utf8 ? CP_UTF8 : CP_ACP), 0, str, -1, str_unicode, size);
-        result.assign(str_unicode);
-        delete[] str_unicode;
-        return result;
+        std::vector<wchar_t> buf(size + 1);
+        MultiByteToWideChar((utf8 ? CP_UTF8 : CP_ACP), 0, str, -1, buf.data(), size);
+        return std::wstring(buf.data());
     }
 
     std::string StringHelper::UnicodeToStr(const wchar_t* wstr, bool utf8 /*= false*/)
     {
         if (wstr == nullptr)
             return std::string();
-        std::string result;
-        int size{ 0 };
-        size = WideCharToMultiByte((utf8 ? CP_UTF8 : CP_ACP), 0, wstr, -1, NULL, 0, NULL, NULL);
+        int size = WideCharToMultiByte((utf8 ? CP_UTF8 : CP_ACP), 0, wstr, -1, NULL, 0, NULL, NULL);
         if (size <= 0) return std::string();
-        char* str = new char[size + 1];
-        WideCharToMultiByte((utf8 ? CP_UTF8 : CP_ACP), 0, wstr, -1, str, size, NULL, NULL);
-        result.assign(str);
-        delete[] str;
-        return result;
+        std::vector<char> buf(size + 1);
+        WideCharToMultiByte((utf8 ? CP_UTF8 : CP_ACP), 0, wstr, -1, buf.data(), size, NULL, NULL);
+        return std::string(buf.data());
     }
 
     bool StringHelper::StringReplace(std::wstring& str, const std::wstring& str_old, const std::wstring& str_new)
@@ -105,7 +100,7 @@ namespace utilities
         {
             str.replace(pos, str_old.length(), str_new);
             replaced = true;
-            pos += str_new.length();    // Ç°½øµ½Ìæ»»ºóµÄ×Ö·û´®Ä©Î²
+            pos += str_new.length();    // Ç°ï¿½ï¿½ï¿½ï¿½ï¿½æ»»ï¿½ï¿½ï¿½ï¿½Ö·ï¿½ï¿½ï¿½Ä©Î²
         }
         return replaced;
     }
@@ -128,17 +123,17 @@ namespace utilities
     {
         if (str.empty()) return;
 
-        int size = static_cast<int>(str.size());  //×Ö·û´®µÄ³¤¶È
+        int size = static_cast<int>(str.size());  //ï¿½Ö·ï¿½ï¿½ï¿½ï¿½Ä³ï¿½ï¿½ï¿½
         if (size < 0) return;
-        int index1 = 0;     //×Ö·û´®ÖÐµÚ1¸ö²»ÊÇ¿Õ¸ñ»ò¿ØÖÆ×Ö·ûµÄÎ»ÖÃ
-        int index2 = size - 1;  //×Ö·û´®ÖÐ×îºóÒ»¸ö²»ÊÇ¿Õ¸ñ»ò¿ØÖÆ×Ö·ûµÄÎ»ÖÃ
+        int index1 = 0;     //ï¿½Ö·ï¿½ï¿½ï¿½ï¿½Ðµï¿½1ï¿½ï¿½ï¿½ï¿½ï¿½Ç¿Õ¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö·ï¿½ï¿½ï¿½Î»ï¿½ï¿½
+        int index2 = size - 1;  //ï¿½Ö·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½Ç¿Õ¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö·ï¿½ï¿½ï¿½Î»ï¿½ï¿½
         while (index1 < size && str[index1] >= 0 && str[index1] <= 32)
             index1++;
         while (index2 >= 0 && str[index2] >= 0 && str[index2] <= 32)
             index2--;
-        if (index1 > index2)    //Èç¹ûindex1 > index2£¬ËµÃ÷×Ö·û´®È«ÊÇ¿Õ¸ñ»ò¿ØÖÆ×Ö·û
+        if (index1 > index2)    //ï¿½ï¿½ï¿½index1 > index2ï¿½ï¿½Ëµï¿½ï¿½ï¿½Ö·ï¿½ï¿½ï¿½È«ï¿½Ç¿Õ¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö·ï¿½
             str.clear();
-        else if (index1 == 0 && index2 == size - 1) //Èç¹ûindex1ºÍindex2µÄÖµ·Ö±ðÎª0ºÍsize - 1£¬ËµÃ÷×Ö·û´®Ç°ºóÃ»ÓÐ¿Õ¸ñ»ò¿ØÖÆ×Ö·û£¬Ö±½Ó·µ»Ø
+        else if (index1 == 0 && index2 == size - 1) //ï¿½ï¿½ï¿½index1ï¿½ï¿½index2ï¿½ï¿½Öµï¿½Ö±ï¿½Îª0ï¿½ï¿½size - 1ï¿½ï¿½Ëµï¿½ï¿½ï¿½Ö·ï¿½ï¿½ï¿½Ç°ï¿½ï¿½Ã»ï¿½Ð¿Õ¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö·ï¿½ï¿½ï¿½Ö±ï¿½Ó·ï¿½ï¿½ï¿½
             return;
         else
             str = str.substr(index1, index2 - index1 + 1);
@@ -155,10 +150,10 @@ namespace utilities
         _StringNormalize(str);
     }
 
-    //½«Ò»¸ö×Ö·û´®·Ö¸î³ÉÈô¸É¸ö×Ö·û£¨Ä£°åÀàÐÍÖ»ÄÜÎªstring»òwstring£©
-    //str: Ô­Ê¼×Ö·û´®
-    //div_ch: ÓÃÓÚ·Ö¸îµÄ×Ö·û
-    //result: ½ÓÊÕ·Ö¸îºóµÄ½á¹û
+    //ï¿½ï¿½Ò»ï¿½ï¿½ï¿½Ö·ï¿½ï¿½ï¿½ï¿½Ö¸ï¿½ï¿½ï¿½ï¿½ï¿½É¸ï¿½ï¿½Ö·ï¿½ï¿½ï¿½Ä£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö»ï¿½ï¿½Îªstringï¿½ï¿½wstringï¿½ï¿½
+    //str: Ô­Ê¼ï¿½Ö·ï¿½ï¿½ï¿½
+    //div_ch: ï¿½ï¿½ï¿½Ú·Ö¸ï¿½ï¿½ï¿½Ö·ï¿½
+    //result: ï¿½ï¿½ï¿½Õ·Ö¸ï¿½ï¿½Ä½ï¿½ï¿½
     template<class T, class value_type>
     static void _StringSplit(const T& str, value_type div_ch, std::vector<T>& results, bool skip_empty = true, bool trim = true)
     {

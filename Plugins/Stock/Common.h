@@ -1,57 +1,9 @@
 ﻿#pragma once
 #include <string>
 #include <iostream>
-#include <sstream>
 #include <cstring>
 #include <string.h>
-#include <atltime.h>
-
-using namespace::std;
-// Log0("这是调试信息！\n")
-#define Log0(fmt) {TCHAR sOut[256];_stprintf_s(sOut,_T(fmt));OutputDebugString(sOut);}
-// Log1("这是调试信息%d\n", 10)
-#define Log1(fmt,var) {TCHAR sOut[256];_stprintf_s(sOut,_T(fmt),var);OutputDebugString(sOut);}
-// Log2("这是调试信息%d--%d\n", 10, 10 + 1)
-#define Log2(fmt,var1,var2) {TCHAR sOut[256];_stprintf_s(sOut,_T(fmt),var1,var2);OutputDebugString(sOut);}
-// Log3("这是调试信息%d--%d--%d\n", 10, 10 + 1, 10 + 2)
-#define Log3(fmt,var1,var2,var3) {TCHAR sOut[256];_stprintf_s(sOut,_T(fmt),var1,var2,var3);OutputDebugString(sOut);}
-// LogX(_T("error %d occured at %d line!\n"), 1170, 400)
-static void LogX(LPCTSTR pstrFormat, ...)
-{
-    //ATLTRACE(_T("In %s ...\n"), __FUNCTIONW__);//函数名
-    //ATLTRACE(_T("Run to %d ...\n"), __LINE__);	//函数行数
-    CTime timeWrite;
-    timeWrite = CTime::GetCurrentTime();
-    CString str = timeWrite.Format(_T("%d %b %y %H:%M:%S - "));
-    ATLTRACE(str);
-
-    va_list args;
-    va_start(args, pstrFormat);
-    str.FormatV(pstrFormat, args);
-    ATLTRACE(str);
-
-    return;
-}
-
-template<class out_type, class in_value>
-static out_type convert(const in_value& t)
-{
-    std::stringstream str;
-    str << t;
-    out_type result;
-    str >> result;
-    return result;
-}
-
-template<class out_type, class in_value>
-static out_type convert(const in_value& t, bool bISWSring) //转wchar，wstring要用到这个
-{
-    std::wstringstream str;
-    str << t;
-    out_type result;
-    str >> result;
-    return result;
-}
+#include <atomic>
 
 class CCommon
 {
@@ -76,7 +28,7 @@ public:
     static std::vector<std::string> split(const std::string& str, const std::string& delimiter);
     static std::wstring vectorJoinString(const std::vector<std::wstring> data, const std::wstring& pattern);
     static std::string removeChar(const std::string& str, char ch);
-    static std::string removeStr(const std::string str, const std::string del);
+    static std::string removeStr(const std::string& str, const std::string& del);
     // 智能简称：自动缩短股票名称
     static std::wstring SmartShortName(const std::wstring& name);
     // 智能识别股票代码：自动纠错和补全前缀
@@ -119,21 +71,24 @@ public:
 };
 
 
-//通过构造函数传递一个bool变量的引用，在构造时将其置为true，析构时置为false
+// RAII guard: sets an atomic<bool> flag to true on construction, false on destruction
 class CFlagLocker
 {
 public:
-    CFlagLocker(bool& flag)
+    explicit CFlagLocker(std::atomic<bool>& flag)
         : m_flag(flag)
     {
-        m_flag = true;
+        m_flag.store(true);
     }
 
     ~CFlagLocker()
     {
-        m_flag = false;
+        m_flag.store(false);
     }
 
+    CFlagLocker(const CFlagLocker&) = delete;
+    CFlagLocker& operator=(const CFlagLocker&) = delete;
+
 private:
-    bool& m_flag;
+    std::atomic<bool>& m_flag;
 };

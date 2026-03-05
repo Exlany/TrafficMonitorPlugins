@@ -59,18 +59,16 @@ namespace STOCK
                      turnover(0.0),
                      priceLimit(0.0)
     {
-      // bidLevels.resize(MAX_LEVEL);
-      // askLevels.resize(MAX_LEVEL);
     }
 
-    void Load(std::wstring key, std::vector<std::string> data);
-    void LoadMG(std::vector<std::string> data, size_t size);
-    void LoadAG(std::vector<std::string> data, size_t size);
-    void LoadSH(std::vector<std::string> data, size_t size);
-    void LoadSZ(std::vector<std::string> data, size_t size);
-    void LoadBJ(std::vector<std::string> data, size_t size);
-    void LoadHK(std::vector<std::string> data, size_t size);
-    void LoadINT(std::vector<std::string> data, size_t size);  // 国际指数/期货
+    void Load(std::wstring key, const std::vector<std::string>& data);
+    void LoadMG(const std::vector<std::string>& data, size_t size);
+    void LoadAG(const std::vector<std::string>& data, size_t size);
+    void LoadHK(const std::vector<std::string>& data, size_t size);
+    void LoadINT(const std::vector<std::string>& data, size_t size);  // 国际指数/期货
+    // 格式化显示价格和涨跌幅
+    // adaptiveDecimal: true 表示根据价格大小自适应小数位（用于虚拟货币）
+    void FormatDisplay(int priceDecimal, bool adaptiveDecimal = false);
   };
 
   // 分时数据点
@@ -84,25 +82,6 @@ namespace STOCK
     TimelinePoint() : volume(0), price(0.0), averagePrice(0.0) {}
     TimelinePoint(const TimePoint &time, Volume vol, Price p, Price avg) : time(time), volume(vol), price(p), averagePrice(avg) {}
   };
-
-  // // K线数据点
-  // struct KLinePoint
-  // {
-  //   TimePoint time;   // 时间戳
-  //   Price openPrice;  // 开盘价
-  //   Price closePrice; // 收盘价
-  //   Price highPrice;  // 最高价
-  //   Price lowPrice;   // 最低价
-  //   Volume volume;    // 成交量
-  //   Amount turnover;  // 成交额
-
-  //   KLinePoint() : openPrice(0.0),
-  //                  closePrice(0.0),
-  //                  highPrice(0.0),
-  //                  lowPrice(0.0),
-  //                  volume(0),
-  //                  turnover(0.0) {}
-  // };
 
   // 定义不同的数据周期
   enum class Period
@@ -136,21 +115,10 @@ namespace STOCK
     std::vector<TimelinePoint> data;
     TimelineData() {};
     Period GetPeriod() const override { return Period::TIMELINE; }
-    TimePoint GetStartTime() const { return data.front().time; }
-    TimePoint GetEndTime() const { return data.back().time; }
+    TimePoint GetStartTime() const { return data.empty() ? TimePoint() : data.front().time; }
+    TimePoint GetEndTime() const { return data.empty() ? TimePoint() : data.back().time; }
     void Clear() { data.clear(); }
   };
-
-  // // K线历史数据
-  // class KLineData : public HistoricalDataBase
-  // {
-  // public:
-  //   Period period;
-  //   std::vector<KLinePoint> data;
-  //   Period GetPeriod() const override { return period; }
-  //   TimePoint GetStartTime() const override { return data.front().time; }
-  //   TimePoint GetEndTime() const override { return data.back().time; }
-  // };
 
   // 股票基础信息
   struct StockInfo
@@ -158,8 +126,7 @@ namespace STOCK
     std::wstring code;              // 股票代码
     std::wstring displayName = L""; // 股票名称
 
-    bool is_ok = TRUE;              // 加载成功标志
-    // std::string industry; // 所属行业
+    bool is_ok = true;              // 加载成功标志
   };
 
   // 股票数据结构
@@ -290,86 +257,4 @@ namespace STOCK
     }
   };
 
-  // 数据更新接口
-  // class IDataUpdateHandler
-  // {
-  // public:
-  //   virtual ~IDataUpdateHandler() = default;
-  //   virtual void OnRealTimeUpdate(const RealTimeData &data) = 0;
-  //   virtual void OnTimelineUpdate(const TimelinePoint &point) = 0;
-  //   virtual void OnKLineUpdate(Period period, const KLinePoint &point) = 0;
-  // };
-
 } // namespace STOCK
-
-// // 使用示例
-// int main()
-// {
-//   using namespace STOCK;
-
-//   // 创建股票市场
-//   STOCK::StockMarket market;
-
-//   // 添加股票
-//   auto stock = market.addStock("000759");
-//   if (!stock)
-//   {
-//     std::cerr << "获取股票数据失败" << std::endl;
-//     return 1;
-//   }
-
-//   // 创建并更新最新数据
-//   RealTimeData realTimeData;
-//   realTimeData.openPrice = 10.5;
-//   realTimeData.prevClosePrice = 10.4;
-//   realTimeData.currentPrice = 10.6;
-//   realTimeData.highPrice = 10.7;
-//   realTimeData.lowPrice = 10.5;
-//   realTimeData.volume = 12345678;
-//   realTimeData.turnover = 130010000.0;
-
-//   // 设置买卖盘数据
-//   realTimeData.bidLevels[0] = OrderLevel(10.59, 10000);
-//   realTimeData.bidLevels[1] = OrderLevel(10.58, 20000);
-//   realTimeData.bidLevels[2] = OrderLevel(10.57, 30000);
-//   realTimeData.bidLevels[3] = OrderLevel(10.56, 40000);
-//   realTimeData.bidLevels[4] = OrderLevel(10.55, 50000);
-
-//   realTimeData.askLevels[0] = OrderLevel(10.61, 10000);
-//   realTimeData.askLevels[1] = OrderLevel(10.62, 20000);
-//   realTimeData.askLevels[2] = OrderLevel(10.63, 30000);
-//   realTimeData.askLevels[3] = OrderLevel(10.64, 40000);
-//   realTimeData.askLevels[4] = OrderLevel(10.65, 50000);
-
-//   // 更新股票数据
-//   stock->updateRealtimeData(realTimeData);
-
-//   // 添加分时数据
-//   auto now = std::chrono::system_clock::now();
-//   TimelinePoint point1(now, 10000, 10.55, 10.525);
-//   stock->addTimelinePoint(point1);
-
-//   // 添加一个分钟后的数据
-//   auto oneMinuteLater = now + std::chrono::minutes(1);
-//   TimelinePoint point2(oneMinuteLater, 12000, 10.6, 10.55);
-//   stock->addTimelinePoint(point2);
-
-//   // 添加日K数据
-//   auto dailyKLine = stock->MakesureHistoricalData<KLineData>(Period::DAY);
-
-//   KLinePoint klp;
-//   klp.time = now;
-//   klp.openPrice = 10.5;
-//   klp.closePrice = 10.6;
-//   klp.highPrice = 10.7;
-//   klp.lowPrice = 10.5;
-//   klp.volume = 1000000;
-//   klp.turnover = 10600000.0;
-
-//   dailyKLine->data.push_back(klp);
-
-//   // 打印股票信息
-//   stock->printInfo();
-
-//   return 0;
-// }

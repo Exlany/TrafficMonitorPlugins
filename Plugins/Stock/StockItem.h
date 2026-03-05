@@ -25,10 +25,10 @@ public:
 
 private:
     // 绘制辅助函数
-    void DrawSingleStock(CDC *pDC, const std::wstring& code, int x, int y, int w, int h,
+    void DrawStockRow(CDC *pDC, const std::wstring& code, int x, int y, int w, int h,
         COLORREF color_default, COLORREF color_red, COLORREF color_green);
     void DrawMultiRow(CDC *pDC, int x, int y, int w, int h,
         COLORREF color_default, COLORREF color_red, COLORREF color_green);
-    void DrawSingleStockInRow(CDC *pDC, const std::wstring& code, int x, int y, int w, int h,
-        COLORREF color_default, COLORREF color_red, COLORREF color_green, int fixedNameWidth = 0);
+    // 计算单个股票的显示宽度
+    static int CalcStockDisplayWidth(CDC *pDC, const std::wstring& code, int price_width, int space_width, int fluctuation_width);
 };

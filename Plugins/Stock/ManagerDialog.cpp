@@ -3,11 +3,13 @@
 
 #include "pch.h"
 #include "Stock.h"
+#include "StockConstants.h"
 #include "afxdialogex.h"
 #include "ManagerDialog.h"
 #include "Common.h"
 #include "OptionsDlg.h"
 #include <Windows.h>
+#include <algorithm>
 
 // CManagerDialog 对话框
 
@@ -55,7 +57,7 @@ BOOL CManagerDialog::OnInitDialog()
     m_min_size.cx = rect.Width();
     m_min_size.cy = rect.Height();
 
-    for (const auto &stock_code : m_data.m_stock_codes)
+    for (const auto &stock_code : m_data.stockCodes)
     {
         m_stock_listbox.AddString(stock_code.c_str());
     }
@@ -65,15 +67,15 @@ BOOL CManagerDialog::OnInitDialog()
         m_stock_listbox.SetItemHeight(i, g_data.DPI(20));
     }
 
-    CheckDlgButton(IDC_FULL_DAY_CHECK, m_data.m_full_day);
-    CheckDlgButton(IDC_SHOW_STOCK_NAME_CHECK, m_data.m_show_stock_name);
-    CheckDlgButton(IDC_COLOR_WITH_PRICE_CHECK, m_data.m_color_with_price);
+    CheckDlgButton(IDC_FULL_DAY_CHECK, m_data.fullDay);
+    CheckDlgButton(IDC_SHOW_STOCK_NAME_CHECK, m_data.showStockName);
+    CheckDlgButton(IDC_COLOR_WITH_PRICE_CHECK, m_data.colorWithPrice);
 
     // 初始化价格小数位数下拉框
     CComboBox* pCombo = (CComboBox*)GetDlgItem(IDC_PRICE_DECIMAL_COMBO);
     pCombo->AddString(_T("2"));
     pCombo->AddString(_T("3"));
-    pCombo->SetCurSel(m_data.m_price_decimal == 2 ? 0 : 1);
+    pCombo->SetCurSel(m_data.priceDecimal == 2 ? 0 : 1);
 
     // 初始化显示模式下拉框
     CComboBox* pModeCombo = (CComboBox*)GetDlgItem(IDC_DISPLAY_MODE_COMBO);
@@ -81,17 +83,17 @@ BOOL CManagerDialog::OnInitDialog()
     pModeCombo->AddString(g_data.StringRes(IDS_DISPLAY_MODE_CAROUSEL));
     pModeCombo->AddString(g_data.StringRes(IDS_DISPLAY_MODE_MANUAL));
     pModeCombo->AddString(g_data.StringRes(IDS_DISPLAY_MODE_SMART));
-    pModeCombo->SetCurSel(static_cast<int>(m_data.m_display_mode));
+    pModeCombo->SetCurSel(static_cast<int>(m_data.displayMode));
 
     // 初始化轮播间隔
     CString intervalStr;
-    intervalStr.Format(_T("%d"), m_data.m_carousel_interval);
+    intervalStr.Format(_T("%d"), m_data.carouselInterval);
     SetDlgItemText(IDC_CAROUSEL_INTERVAL_EDIT, intervalStr);
 
     CString value;
-    value.Format(_T("%d"), static_cast<int>(g_data.m_setting_data.m_kline_width));
+    value.Format(_T("%d"), static_cast<int>(m_data.klineWidth));
     SetDlgItemText(IDC_KLINE_WIDTH_EDIT, value);
-    value.Format(_T("%d"), static_cast<int>(g_data.m_setting_data.m_kline_height));
+    value.Format(_T("%d"), static_cast<int>(m_data.klineHeight));
     SetDlgItemText(IDC_KLINE_HEIGHT_EDIT, value);
 
     return TRUE; // return TRUE unless you set the focus to a control
@@ -105,24 +107,24 @@ void CManagerDialog::OnListItemClick()
 
     curSelPos = m_stock_listbox.GetCurSel();
     m_stock_listbox.GetText(curSelPos, curSelTxt);
-    Log1("OnListItemClick: %s\n", curSelTxt.GetString());
+    TRACE(L"OnListItemClick: %s\n", curSelTxt.GetString());
 }
 
 void CManagerDialog::OnDelBtnClick()
 {
     int curSelPos = m_stock_listbox.GetCurSel();
-    Log1("OnDelBtnClick: %d\n", curSelPos);
-    if (curSelPos < 0 || curSelPos > m_data.m_stock_codes.size())
+    TRACE(L"OnDelBtnClick: %d\n", curSelPos);
+    if (curSelPos < 0 || static_cast<size_t>(curSelPos) >= m_data.stockCodes.size())
     {
         return;
     }
     m_stock_listbox.DeleteString(curSelPos);
-    m_data.m_stock_codes.erase(m_data.m_stock_codes.begin() + curSelPos);
+    m_data.stockCodes.erase(m_data.stockCodes.begin() + curSelPos);
 }
 
 void CManagerDialog::OnAddBtnClick()
 {
-    if (m_data.m_stock_codes.size() >= Stock_ITEM_MAX)
+    if (m_data.stockCodes.size() >= StockConstants::MAX_STOCK_ITEMS)
     {
         MessageBox(g_data.StringRes(IDS_STOCK_NUM_LIMIT_WARNING), g_data.StringRes(IDS_PLUGIN_NAME), MB_ICONWARNING | MB_OK);
         return;
@@ -134,20 +136,20 @@ void CManagerDialog::OnAddBtnClick()
         std::wstring stock_code = dlg.m_stock_code.GetString();
         if (!stock_code.empty())
         {
-            if (count(m_data.m_stock_codes.begin(), m_data.m_stock_codes.end(), stock_code))
+            if (std::count(m_data.stockCodes.begin(), m_data.stockCodes.end(), stock_code))
             {
-                Log1("OnAddBtnClick: ignore %s\n", stock_code.c_str());
+                TRACE(L"OnAddBtnClick: ignore %s\n", stock_code.c_str());
                 return;
             }
-            Log1("OnAddBtnClick: %s\n", stock_code.c_str());
-            m_data.m_stock_codes.push_back(stock_code.c_str());
+            TRACE(L"OnAddBtnClick: %s\n", stock_code.c_str());
+            m_data.stockCodes.push_back(stock_code.c_str());
             m_stock_listbox.AddString(stock_code.c_str());
 
             // 保存别名
             std::wstring alias = dlg.m_stock_alias.GetString();
             if (!alias.empty())
             {
-                m_data.m_stock_aliases[stock_code] = alias;
+                m_data.aliases[stock_code] = alias;
             }
         }
     }
@@ -155,44 +157,45 @@ void CManagerDialog::OnAddBtnClick()
 
 void CManagerDialog::OnClickedFullDayCheck()
 {
-    m_data.m_full_day = (IsDlgButtonChecked(IDC_FULL_DAY_CHECK) != 0);
+    m_data.fullDay = (IsDlgButtonChecked(IDC_FULL_DAY_CHECK) != 0);
 }
 
 void CManagerDialog::OnBnClickedShowStockNameCheck()
 {
-    m_data.m_show_stock_name = (IsDlgButtonChecked(IDC_SHOW_STOCK_NAME_CHECK) != 0);
+    m_data.showStockName = (IsDlgButtonChecked(IDC_SHOW_STOCK_NAME_CHECK) != 0);
 }
 
 void CManagerDialog::OnBnClickedColorWithPriceCheck()
 {
-    m_data.m_color_with_price = (IsDlgButtonChecked(IDC_COLOR_WITH_PRICE_CHECK) != 0);
+    m_data.colorWithPrice = (IsDlgButtonChecked(IDC_COLOR_WITH_PRICE_CHECK) != 0);
 }
 
 void CManagerDialog::OnBnClickedOk()
 {
-    bool stock_code_changed{g_data.m_setting_data.m_stock_codes != m_data.m_stock_codes};
+    SettingsSnapshot oldSettings = g_data.GetSettingsSnapshot();
+    bool stock_code_changed{oldSettings.stockCodes != m_data.stockCodes};
     CString value;
     GetDlgItemText(IDC_KLINE_WIDTH_EDIT, value);
-    m_data.m_kline_width = _ttoi(value);
+    m_data.klineWidth = _ttoi(value);
     GetDlgItemText(IDC_KLINE_HEIGHT_EDIT, value);
-    m_data.m_kline_height = _ttoi(value);
+    m_data.klineHeight = _ttoi(value);
 
     // 保存价格小数位数
     CComboBox* pCombo = (CComboBox*)GetDlgItem(IDC_PRICE_DECIMAL_COMBO);
-    m_data.m_price_decimal = (pCombo->GetCurSel() == 0) ? 2 : 3;
+    m_data.priceDecimal = (pCombo->GetCurSel() == 0) ? 2 : 3;
 
     // 保存显示模式
     CComboBox* pModeCombo = (CComboBox*)GetDlgItem(IDC_DISPLAY_MODE_COMBO);
-    m_data.m_display_mode = static_cast<StockDisplayMode>(pModeCombo->GetCurSel());
+    m_data.displayMode = static_cast<StockDisplayMode>(pModeCombo->GetCurSel());
 
     // 保存轮播间隔
     CString intervalStr;
     GetDlgItemText(IDC_CAROUSEL_INTERVAL_EDIT, intervalStr);
-    m_data.m_carousel_interval = _ttoi(intervalStr);
-    if (m_data.m_carousel_interval < 1)
-        m_data.m_carousel_interval = 1;  // 最小1秒
+    m_data.carouselInterval = _ttoi(intervalStr);
+    if (m_data.carouselInterval < 1)
+        m_data.carouselInterval = 1;  // 最小1秒
 
-    g_data.m_setting_data = m_data;
+    g_data.UpdateSettings(m_data);
     g_data.SaveConfig();
     if (stock_code_changed)
     {
@@ -210,9 +213,9 @@ void CManagerDialog::OnBnClickedCancel()
 void CManagerDialog::OnLbnDblclkMgrList()
 {
     int index = m_stock_listbox.GetCurSel();
-    if (index >= 0 && index < m_data.m_stock_codes.size())
+    if (index >= 0 && static_cast<size_t>(index) < m_data.stockCodes.size())
     {
-        std::wstring old_code = m_data.m_stock_codes[index];
+        std::wstring old_code = m_data.stockCodes[index];
         COptionsDlg dlg(old_code, this);
         auto rtn = dlg.DoModal();
         if (rtn == IDOK)
@@ -220,16 +223,16 @@ void CManagerDialog::OnLbnDblclkMgrList()
             if (!dlg.m_stock_code.IsEmpty())
             {
                 std::wstring new_code = dlg.m_stock_code.GetString();
-                m_data.m_stock_codes[index] = new_code;
+                m_data.stockCodes[index] = new_code;
                 m_stock_listbox.DeleteString(index);
                 m_stock_listbox.InsertString(index, dlg.m_stock_code);
 
                 // 更新别名
-                m_data.m_stock_aliases.erase(old_code);
+                m_data.aliases.erase(old_code);
                 std::wstring alias = dlg.m_stock_alias.GetString();
                 if (!alias.empty())
                 {
-                    m_data.m_stock_aliases[new_code] = alias;
+                    m_data.aliases[new_code] = alias;
                 }
             }
         }

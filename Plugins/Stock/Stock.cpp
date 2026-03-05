@@ -1,22 +1,28 @@
 ﻿#include "pch.h"
 #include "Stock.h"
+#include "StockConstants.h"
 #include "DataManager.h"
 #include "OptionsDlg.h"
 #include "ManagerDialog.h"
 #include "Common.h"
 #include "StockVersion.h"
+#include "Infrastructure/CWinHttpClient.h"
+#include "Domain/CStockRepository.h"
 #include <cmath>
 #include <Shellapi.h>
+#include <shared_mutex>
+
+using namespace StockConstants;
 
 Stock Stock::m_instance;
 
-Stock::Stock() : m_pFloatingWnd(NULL)
+Stock::Stock()
 {
-    m_items = vector<StockItem>(Stock_ITEM_MAX);
+    m_items = std::vector<StockItem>(MAX_STOCK_ITEMS);
     fill(m_items.begin(), m_items.end(), StockItem());
-    for (int index = 0; index < m_items.size(); index++)
+    for (size_t index = 0; index < m_items.size(); index++)
     {
-        m_items[index].index = index;
+        m_items[index].index = static_cast<int>(index);
     }
 }
 
@@ -33,27 +39,33 @@ Stock &Stock::Instance()
 UINT Stock::ThreadCallback(LPVOID dwUser)
 {
     AFX_MANAGE_STATE(AfxGetStaticModuleState());
-    CFlagLocker flag_locker(m_instance.m_is_thread_runing);
 
-    if (g_data.m_setting_data.m_stock_codes.empty())
+    // 使用 RAII 确保线程标志被重置
+    struct ThreadGuard {
+        std::atomic<bool>& flag;
+        ~ThreadGuard() { flag.store(false); }
+    } guard{m_instance.m_is_thread_running};
+
+    // 获取设置数据的快照（线程安全）
+    SettingsSnapshot settings = g_data.GetSettingsSnapshot();
+
+    if (settings.stockCodes.empty())
     {
-        // CCommon::WriteLog(L"Stock_code not setting!", g_data.m_log_path.c_str());
         g_data.ResetText();
         return 0;
     }
 
     time_t cur_time = time(nullptr);
-    if (cur_time - m_instance.m_last_request_time > 3)
+    unsigned __int64 last_req = m_instance.m_last_request_time.load();
+    if (cur_time - static_cast<time_t>(last_req) > REQUEST_INTERVAL_SEC)
     {
-        m_instance.m_last_request_time = cur_time;
+        m_instance.m_last_request_time.store(static_cast<unsigned __int64>(cur_time));
 
-        if (g_data.m_setting_data.m_full_day != 1)
+        if (!settings.fullDay)
         {
             SYSTEMTIME now_time;
             GetLocalTime(&now_time);
-            // CCommon::WriteLog(now_time.wHour, g_data.m_log_path.c_str());
-            // CCommon::WriteLog(now_time.wMinute, g_data.m_log_path.c_str());
-            if (now_time.wHour < 9 || now_time.wHour > 15 || (now_time.wHour == 15 && now_time.wMinute > 30))
+            if (now_time.wHour < TRADING_START_HOUR || now_time.wHour > TRADING_END_HOUR || (now_time.wHour == TRADING_END_HOUR && now_time.wMinute > TRADING_START_MINUTE))
             {
                 CCommon::WriteLog(L"Not currently in trading time!", g_data.m_log_path.c_str());
                 g_data.ResetText();
@@ -61,13 +73,10 @@ UINT Stock::ThreadCallback(LPVOID dwUser)
             }
         }
 
-        // 禁用选项设置中的“更新”按钮
-        m_instance.DisableUpdateCommand();
+        // 注意：不在此处禁用/启用菜单项，因为菜单操作应在主线程进行
+        // 用户在数据请求期间仍可点击"更新"，但会因 REQUEST_INTERVAL_SEC 限制而被跳过
 
         g_data.RequestRealtimeData();
-
-        // 启用选项设置中的“更新”按钮
-        m_instance.EnableUpdateCommand();
     }
     return 0;
 }
@@ -83,12 +92,13 @@ void Stock::LoadContextMenu()
 
 IPluginItem *Stock::GetItem(int index)
 {
-    auto& codes = g_data.m_setting_data.m_stock_codes;
-    size_t codes_size = codes.size();
+    SettingsSnapshot settings = g_data.GetSettingsSnapshot();
+    size_t codes_size = settings.stockCodes.size();
     if (codes_size == 0)
     {
         if (index > 0)
             return nullptr;
+        std::shared_lock<std::shared_mutex> lock(m_itemsMutex);
         return &(m_items[0]);
     }
 
@@ -97,12 +107,14 @@ IPluginItem *Stock::GetItem(int index)
     {
         if (index > 0)
             return nullptr;
+        std::shared_lock<std::shared_mutex> lock(m_itemsMutex);
         return &(m_items[0]);
     }
 
     // 单个股票
     if (index > 0)
         return nullptr;
+    std::shared_lock<std::shared_mutex> lock(m_itemsMutex);
     return &(m_items[0]);
 }
 
@@ -113,39 +125,60 @@ const wchar_t *Stock::GetTooltipInfo()
 
 void Stock::DataRequired()
 {
-    auto& codes = g_data.m_setting_data.m_stock_codes;
+    // 获取设置数据的快照（线程安全）
+    SettingsSnapshot settings = g_data.GetSettingsSnapshot();
+    const auto& codes = settings.stockCodes;
 
     // 根据显示模式更新 m_items[0].stock_id
     if (!codes.empty())
     {
-        switch (g_data.m_setting_data.m_display_mode)
+        switch (settings.displayMode)
         {
         case StockDisplayMode::Carousel:
             // 轮播模式：检查是否需要切换
             if (codes.size() > 1)
             {
                 time_t now = time(nullptr);
-                if (now - m_last_carousel_time >= g_data.m_setting_data.m_carousel_interval)
+                time_t last_carousel = m_last_carousel_time.load();
+                if (now - last_carousel >= settings.carouselInterval)
                 {
-                    m_last_carousel_time = now;
-                    m_current_display_index = (m_current_display_index + 1) % codes.size();
+                    m_last_carousel_time.store(now);
+                    int cur_idx = m_current_display_index.load();
+                    m_current_display_index.store((cur_idx + 1) % static_cast<int>(codes.size()));
                 }
             }
-            if (m_current_display_index >= codes.size())
-                m_current_display_index = 0;
-            m_items[0].stock_id = codes[m_current_display_index];
+            {
+                int cur_idx = m_current_display_index.load();
+                if (cur_idx >= static_cast<int>(codes.size()))
+                {
+                    cur_idx = 0;
+                    m_current_display_index.store(0);
+                }
+                std::unique_lock<std::shared_mutex> lock(m_itemsMutex);
+                m_items[0].stock_id = codes[cur_idx];
+            }
             break;
 
         case StockDisplayMode::Manual:
             // 手动模式：使用当前索引
-            if (m_current_display_index >= codes.size())
-                m_current_display_index = 0;
-            m_items[0].stock_id = codes[m_current_display_index];
+            {
+                int cur_idx = m_current_display_index.load();
+                if (cur_idx >= static_cast<int>(codes.size()))
+                {
+                    cur_idx = 0;
+                    m_current_display_index.store(0);
+                }
+                std::unique_lock<std::shared_mutex> lock(m_itemsMutex);
+                m_items[0].stock_id = codes[cur_idx];
+            }
             break;
 
         case StockDisplayMode::Smart:
             // 智能模式：使用涨跌幅最大的股票
-            m_items[0].stock_id = codes[GetSmartIndex()];
+            {
+                std::unique_lock<std::shared_mutex> lock(m_itemsMutex);
+                m_items[0].stock_id = codes[GetSmartIndex()];
+            }
             break;
 
         default:
@@ -154,36 +187,24 @@ void Stock::DataRequired()
         }
     }
 
-    static time_t last_req_time{-1};
     time_t cur_time = time(nullptr);
-    if (cur_time - m_instance.m_last_request_time > 3)
+    unsigned __int64 last_req = m_instance.m_last_request_time.load();
+    if (cur_time - static_cast<time_t>(last_req) > REQUEST_INTERVAL_SEC)
     {
-        last_req_time = cur_time;
         SendStockInfoRequest();
     }
-    std::lock_guard<std::mutex> lock(m_wndMutex);
-    if (m_pFloatingWnd != NULL && ::IsWindow(m_pFloatingWnd->GetSafeHwnd()))
-    {
-        m_pFloatingWnd->SendMessage(FWND_MSG_REQUEST_DATA, cur_time, 0);
-        // DWORD_PTR dwResult = 0;
-        // LRESULT lr = ::SendMessageTimeout(
-        //     m_pFloatingWnd->GetSafeHwnd(),  // 目标窗口句柄
-        //     FWND_MSG_REQUEST_DATA,          // 消息ID
-        //     cur_time,                       // wParam
-        //     0,                              // lParam
-        //     SMTO_ABORTIFHUNG | SMTO_BLOCK,  // 如果窗口挂起则放弃，并阻塞调用线程
-        //     2000,                           // 2秒超时
-        //     &dwResult);                     // 接收返回值
 
-        // if (lr == 0) // 失败
-        //{
-        //     DWORD dwErr = GetLastError();
-        //     // 处理错误：记录日志或销毁无效窗口等
-        //     if (dwErr == ERROR_TIMEOUT)
-        //     {
-        //         TRACE("SendMessageTimeout timed out\n");
-        //     }
-        // }
+    // 使用 PostMessage 减少 TOCTOU 窗口
+    {
+        std::lock_guard<std::mutex> lock(m_wndMutex);
+        if (m_pFloatingWnd)
+        {
+            HWND hWnd = m_pFloatingWnd->GetSafeHwnd();
+            if (hWnd && ::IsWindow(hWnd))
+            {
+                ::PostMessage(hWnd, FWND_MSG_REQUEST_DATA, static_cast<WPARAM>(cur_time), 0);
+            }
+        }
     }
 }
 
@@ -229,14 +250,17 @@ void Stock::OnExtenedInfo(ExtendedInfoIndex index, const wchar_t *data)
         g_data.LoadConfig(std::wstring(data));
         updateItems();
         // 启动后台线程检查更新
-        if (g_data.m_setting_data.m_check_update)
         {
-            AfxBeginThread(CheckUpdateThread, nullptr);
+            SettingsSnapshot settings = g_data.GetSettingsSnapshot();
+            if (settings.checkUpdate)
+            {
+                AfxBeginThread(CheckUpdateThread, nullptr);
+            }
         }
         break;
     case ITMPlugin::EI_TASKBAR_WND_VALUE_RIGHT_ALIGN:
         // 获取TrafficMonitor任务栏窗口中"数值右对齐"设置
-        g_data.m_right_align = (_wtoi(data) != 0);
+        g_data.m_right_align.store(_wtoi(data) != 0);
         break;
     default:
         break;
@@ -275,17 +299,15 @@ void *Stock::GetPluginIcon()
 
 void Stock::updateItems()
 {
+    SettingsSnapshot settings = g_data.GetSettingsSnapshot();
+    std::unique_lock<std::shared_mutex> lock(m_itemsMutex);
     for (size_t i = 0; i < m_items.size(); i++)
     {
         m_items[i].enable = FALSE;
     }
-    for (size_t index = 0; index < g_data.m_setting_data.m_stock_codes.size(); index++)
+    for (size_t index = 0; index < settings.stockCodes.size() && index < m_items.size(); index++)
     {
-        std::wstring key = g_data.m_setting_data.m_stock_codes[index];
-        if (index > m_items.size() - 1)
-        {
-            break;
-        }
+        std::wstring key = settings.stockCodes[index];
         m_items[index].enable = TRUE;
         m_items[index].stock_id = key;
     }
@@ -295,13 +317,13 @@ INT_PTR Stock::ShowStockManageDlg(CWnd *pWnd)
 {
     AFX_MANAGE_STATE(AfxGetStaticModuleState());
     CManagerDialog dlg(pWnd);
-    dlg.m_data = g_data.m_setting_data;
+    dlg.m_data = g_data.GetSettingsSnapshot();
     m_option_dlg = &dlg;
     INT_PTR rtn = dlg.DoModal();
     m_option_dlg = nullptr;
     if (rtn == IDOK)
     {
-        g_data.m_setting_data = dlg.m_data;
+        g_data.UpdateSettings(dlg.m_data);
         updateItems();
         g_data.SaveConfig();
     }
@@ -310,8 +332,17 @@ INT_PTR Stock::ShowStockManageDlg(CWnd *pWnd)
 
 void Stock::SendStockInfoRequest()
 {
-    if (!m_is_thread_runing) // 确保线程已退出
-        AfxBeginThread(ThreadCallback, nullptr);
+    // 使用 compare_exchange 确保线程安全启动
+    bool expected = false;
+    if (m_is_thread_running.compare_exchange_strong(expected, true))
+    {
+        CWinThread* pThread = AfxBeginThread(ThreadCallback, nullptr);
+        if (pThread == nullptr)
+        {
+            // 线程创建失败，重置标志
+            m_is_thread_running.store(false);
+        }
+    }
 }
 
 void Stock::ShowContextMenu(CWnd *pWnd)
@@ -344,93 +375,76 @@ void Stock::ShowFloatingWnd(void *hWnd, CPoint ptScreen, std::wstring stock_id)
     ClientToScreen((HWND)hWnd, &ptScreen);
 
     CWnd *pWnd = CWnd::FromHandle((HWND)hWnd);
+    if (!pWnd)
+        return;
 
-    CFont *font = pWnd->GetParent()->GetFont();
+    CWnd *pParent = pWnd->GetParent();
+    CFont *font = pParent ? pParent->GetFont() : nullptr;
 
     std::lock_guard<std::mutex> lock(m_wndMutex);
     // 创建新的悬浮窗
-    m_pFloatingWnd = new CFloatingWnd;
+    m_pFloatingWnd = std::make_unique<CFloatingWnd>();
     if (!m_pFloatingWnd->Create(font, ptScreen, stock_id))
     {
-        delete m_pFloatingWnd;
-        m_pFloatingWnd = NULL;
+        m_pFloatingWnd.reset();
     }
 }
 
 void Stock::DestroyFloatingWnd()
 {
     std::lock_guard<std::mutex> lock(m_wndMutex);
-    if (m_pFloatingWnd != NULL && ::IsWindow(m_pFloatingWnd->GetSafeHwnd()))
+    if (m_pFloatingWnd && ::IsWindow(m_pFloatingWnd->GetSafeHwnd()))
     {
         m_pFloatingWnd->DestroyWindow();
-        delete m_pFloatingWnd;
-        m_pFloatingWnd = NULL;
     }
+    m_pFloatingWnd.reset();
 }
 
 void Stock::UpdateKLine()
 {
     std::lock_guard<std::mutex> lock(m_wndMutex);
-    if (m_pFloatingWnd != NULL && ::IsWindow(m_pFloatingWnd->GetSafeHwnd()))
+    if (m_pFloatingWnd && ::IsWindow(m_pFloatingWnd->GetSafeHwnd()))
     {
         m_pFloatingWnd->SendMessage(FWND_MSG_UPDATE_STATUS, FALSE, 0);
-        // DWORD_PTR dwResult = 0;
-        // LRESULT lr = ::SendMessageTimeout(
-        //     m_pFloatingWnd->GetSafeHwnd(),  // 目标窗口句柄
-        //     FWND_MSG_UPDATE_STATUS,          // 消息ID
-        //     FALSE,                       // wParam
-        //     0,                              // lParam
-        //     SMTO_ABORTIFHUNG | SMTO_BLOCK,  // 如果窗口挂起则放弃，并阻塞调用线程
-        //     2000,                           // 2秒超时
-        //     &dwResult);                     // 接收返回值
-
-        // if (lr == 0) // 失败
-        //{
-        //     DWORD dwErr = GetLastError();
-        //     // 处理错误：记录日志或销毁无效窗口等
-        //     if (dwErr == ERROR_TIMEOUT)
-        //     {
-        //         TRACE("SendMessageTimeout timed out\n");
-        //     }
-        // }
     }
 }
 
 void Stock::SwitchToNextStock()
 {
-    auto& codes = g_data.m_setting_data.m_stock_codes;
+    SettingsSnapshot settings = g_data.GetSettingsSnapshot();
+    const auto& codes = settings.stockCodes;
     if (codes.size() > 1)
     {
-        m_current_display_index = (m_current_display_index + 1) % codes.size();
+        int cur_idx = m_current_display_index.load();
+        int new_idx = (cur_idx + 1) % static_cast<int>(codes.size());
+        m_current_display_index.store(new_idx);
         // 立即更新 m_items[0].stock_id
-        m_items[0].stock_id = codes[m_current_display_index];
+        std::unique_lock<std::shared_mutex> lock(m_itemsMutex);
+        m_items[0].stock_id = codes[new_idx];
     }
 }
 
 size_t Stock::GetSecondRowIndex()
 {
-    auto& codes = g_data.m_setting_data.m_stock_codes;
+    SettingsSnapshot settings = g_data.GetSettingsSnapshot();
+    const auto& codes = settings.stockCodes;
     if (codes.size() <= 1)
         return 0;
 
     // 第二行显示当前索引的下一个
-    size_t firstIdx = m_current_display_index;
+    size_t firstIdx = static_cast<size_t>(m_current_display_index.load());
     size_t secondIdx = (firstIdx + 1) % codes.size();
     return secondIdx;
 }
 
 void Stock::DisableUpdateCommand()
 {
-    // if (m_option_dlg != nullptr)
-    //     m_option_dlg->EnableUpdateBtn(false);
     if (m_menu.m_hMenu != NULL)
         m_menu.EnableMenuItem(ID_UPDATE, MF_BYCOMMAND | MF_GRAYED);
 }
 
 void Stock::EnableUpdateCommand()
 {
-    // if (m_instance.m_option_dlg != nullptr)
-    //     m_instance.m_option_dlg->EnableUpdateBtn(true);
     if (m_menu.m_hMenu != NULL)
         m_menu.EnableMenuItem(ID_UPDATE, MF_BYCOMMAND | MF_ENABLED);
 }
@@ -443,22 +457,24 @@ ITMPlugin *TMPluginGetInstance()
 
 int Stock::GetSmartIndex()
 {
-    auto& codes = g_data.m_setting_data.m_stock_codes;
+    // 获取设置数据的快照（线程安全）
+    SettingsSnapshot settings = g_data.GetSettingsSnapshot();
+    const auto& codes = settings.stockCodes;
     if (codes.empty())
         return 0;
 
     int maxIndex = 0;
     double maxScore = 0;
 
-    // 注意：此函数被 GetItem() 调用，不应在此获取 m_stockDataMutex 锁
-    // 因为调用方可能已经持有锁，会导致死锁
+    // 获取数据锁以保护股票数据访问
+    std::lock_guard<std::mutex> lock(g_data.GetStockDataMutex());
     for (size_t i = 0; i < codes.size() && i < m_items.size(); i++)
     {
-        auto data = g_data.GetStockData(codes[i]);
+        auto data = g_data.GetRepository().GetMarket().getStock(codes[i]);
         if (data && data->realTimeData.prevClosePrice > 0)
         {
             // 计算当日涨跌幅绝对值
-            double dailyChange = abs(data->realTimeData.currentPrice - data->realTimeData.prevClosePrice);
+            double dailyChange = std::abs(data->realTimeData.currentPrice - data->realTimeData.prevClosePrice);
             double dailyChangePercent = dailyChange / data->realTimeData.prevClosePrice;
 
             // 计算10分钟内的涨跌幅（通过分时数据）
@@ -468,20 +484,20 @@ int Stock::GetSmartIndex()
             {
                 // 获取最近10分钟的数据点（假设每分钟一个点）
                 size_t dataSize = timelineData->data.size();
-                size_t startIdx = (dataSize > 10) ? (dataSize - 10) : 0;
+                size_t startIdx = (dataSize > RECENT_MINUTES) ? (dataSize - RECENT_MINUTES) : 0;
 
                 STOCK::Price startPrice = timelineData->data[startIdx].price;
                 STOCK::Price endPrice = timelineData->data[dataSize - 1].price;
 
                 if (startPrice > 0)
                 {
-                    recentChangePercent = abs(endPrice - startPrice) / startPrice;
+                    recentChangePercent = std::abs(endPrice - startPrice) / startPrice;
                 }
             }
 
             // 综合评分：当日涨跌幅(权重0.4) + 10分钟涨跌幅(权重0.6)
             // 10分钟变化更能反映当前活跃度
-            double score = dailyChangePercent * 0.4 + recentChangePercent * 0.6;
+            double score = dailyChangePercent * DAILY_CHANGE_WEIGHT + recentChangePercent * RECENT_CHANGE_WEIGHT;
 
             if (score > maxScore)
             {
@@ -499,16 +515,16 @@ UINT Stock::CheckUpdateThread(LPVOID pParam)
 
     // 等待网络连接就绪，最多等待60秒
     // 每5秒检查一次网络连接
-    int maxRetries = 12;
+    int maxRetries = NETWORK_CHECK_MAX_RETRIES;
     bool networkReady = false;
 
     for (int i = 0; i < maxRetries; i++)
     {
         // 延迟5秒
-        Sleep(5000);
+        Sleep(NETWORK_CHECK_INTERVAL);
 
         // 检查网络连接
-        if (CCommon::IsNetworkAvailable())
+        if (g_data.GetHttpClient().IsNetworkAvailable())
         {
             networkReady = true;
             break;
