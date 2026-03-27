@@ -4,6 +4,7 @@
 #include <afxinet.h>
 #include <memory>
 #include <algorithm>
+#include <cmath>
 #include "Common.h"
 #include "DataManager.h"
 
@@ -13,6 +14,7 @@ BEGIN_MESSAGE_MAP(CFloatingWnd, CWnd)
 ON_WM_PAINT()
 ON_WM_ERASEBKGND()
 ON_WM_LBUTTONDOWN()
+ON_WM_ACTIVATE()
 ON_WM_CREATE()
 ON_MESSAGE(FWND_MSG_UPDATE_STATUS, OnUpdateStatus)
 ON_MESSAGE(FWND_MSG_REQUEST_DATA, OnRequestData)
@@ -122,7 +124,7 @@ BOOL CFloatingWnd::Create(CFont *font, CPoint pt, std::wstring stock_id)
     CRect screenRect = mi.rcWork; // 工作区域
 
     // 创建透明全屏窗口
-    if (!m_transparentWnd.CreateEx(WS_EX_TOOLWINDOW /* | WS_EX_LAYERED */ /* | WS_EX_TRANSPARENT */,
+    if (!m_transparentWnd.CreateEx(WS_EX_TOOLWINDOW | WS_EX_LAYERED,
                                     L"CTransparentWnd", L"", WS_POPUP | WS_VISIBLE,
                                     screenRect, NULL, 0, NULL))
     {
@@ -133,14 +135,16 @@ BOOL CFloatingWnd::Create(CFont *font, CPoint pt, std::wstring stock_id)
     const SettingsSnapshot settings = g_data.GetSettingsSnapshot();
     const int WIDTH = g_data.RDPI(settings.klineWidth);
     const int HEIGHT = g_data.RDPI(settings.klineHeight);
-    int x = pt.x;
-    int y = pt.y;
+    const int popupOffsetX = g_data.RDPI(16);
+    const int popupOffsetY = g_data.RDPI(18);
+    int x = pt.x + popupOffsetX;
+    int y = pt.y + popupOffsetY;
 
     // 调整位置
     if (x + WIDTH > screenRect.right)
-        x = x - WIDTH;
+        x = pt.x - WIDTH - popupOffsetX;
     if (y + HEIGHT > screenRect.bottom)
-        y = y - HEIGHT;
+        y = pt.y - HEIGHT - popupOffsetY;
     x = (std::max)(static_cast<int>(screenRect.left), x);
     y = (std::max)(static_cast<int>(screenRect.top), y);
 
@@ -161,8 +165,8 @@ BOOL CFloatingWnd::Create(CFont *font, CPoint pt, std::wstring stock_id)
     BringWindowToTop();
     SetForegroundWindow();
 
-    // 设置完全透明
-    m_transparentWnd.SetLayeredWindowAttributes(0, 0, LWA_ALPHA);
+    // 设置近乎不可见的遮罩层，用于处理浮窗之外的点击关闭
+    m_transparentWnd.SetLayeredWindowAttributes(0, 1, LWA_ALPHA);
     m_transparentWnd.ShowWindow(SW_SHOW);
 
     TRACE(L"Windows created successfully\n");
@@ -224,9 +228,9 @@ void CFloatingWnd::DrawGrid(CDC *pDC, int w, int h, int timelineH)
     pDC->SelectObject(pOldPen);
 }
 
-void CFloatingWnd::DrawPriceLabels(CDC *pDC, const STOCK::RealTimeData &realtimeData, int w, int timelineH)
+void CFloatingWnd::DrawPriceLabels(CDC *pDC, const STOCK::RealTimeData &realtimeData, int w, int timelineH, STOCK::Price displayPriceLimit)
 {
-    STOCK::Price priceLimit = realtimeData.priceLimit;
+    STOCK::Price priceLimit = displayPriceLimit;
     CRect timelineRect(0, 0, w, timelineH);
 
     pDC->SetTextColor(StockConstants::COLOR_RISE_TEXT);
@@ -238,7 +242,8 @@ void CFloatingWnd::DrawPriceLabels(CDC *pDC, const STOCK::RealTimeData &realtime
     pDC->DrawText(upperLimitTxt, upperLimitTxtRect, DT_TOP | DT_SINGLELINE | DT_NOPREFIX);
 
     CString upperLimitRateTxt;
-    upperLimitRateTxt.Format(_T("%.2f%%"), priceLimit * 100.0 / realtimeData.prevClosePrice);
+    const double safePrevClose = (realtimeData.prevClosePrice > 0.0) ? realtimeData.prevClosePrice : 1.0;
+    upperLimitRateTxt.Format(_T("%.2f%%"), priceLimit * 100.0 / safePrevClose);
     CRect upperLimitRateTxtRect{timelineRect};
     upperLimitRateTxtRect.left = w - (upperLimitRateTxtRect.left + pDC->GetTextExtent(upperLimitRateTxt).cx);
     pDC->DrawText(upperLimitRateTxt, upperLimitRateTxtRect, DT_TOP | DT_SINGLELINE | DT_NOPREFIX);
@@ -252,7 +257,7 @@ void CFloatingWnd::DrawPriceLabels(CDC *pDC, const STOCK::RealTimeData &realtime
     pDC->DrawText(lowerLimitTxt, lowerLimitTxtRect, DT_BOTTOM | DT_SINGLELINE | DT_NOPREFIX);
 
     CString lowerLimitRateTxt;
-    lowerLimitRateTxt.Format(_T("-%.2f%%"), priceLimit * 100.0 / realtimeData.prevClosePrice);
+    lowerLimitRateTxt.Format(_T("-%.2f%%"), priceLimit * 100.0 / safePrevClose);
     CRect lowerLimitRateTxtRect{timelineRect};
     lowerLimitRateTxtRect.left = w - (lowerLimitRateTxtRect.left + pDC->GetTextExtent(lowerLimitRateTxt).cx);
     pDC->DrawText(lowerLimitRateTxt, lowerLimitRateTxtRect, DT_BOTTOM | DT_SINGLELINE | DT_NOPREFIX);
@@ -266,10 +271,10 @@ void CFloatingWnd::DrawPriceLabels(CDC *pDC, const STOCK::RealTimeData &realtime
 }
 
 void CFloatingWnd::DrawTimelineCurve(CDC *pDC, const std::vector<STOCK::TimelinePoint> &timelinePoint,
-                                      const STOCK::RealTimeData &realtimeData, int x, int y, int w, int h)
+                                      const STOCK::RealTimeData &realtimeData, int x, int y, int w, int h, STOCK::Price displayPriceLimit)
 {
     float halfH = h / 2.0f;
-    STOCK::Price priceLimit = realtimeData.priceLimit;
+    STOCK::Price priceLimit = displayPriceLimit;
     float unitY = priceLimit != 0 ? halfH / static_cast<float>(priceLimit * 100) : 0;
 
     CPen pKLine(PS_SOLID, 1, StockConstants::COLOR_KLINE);
@@ -301,6 +306,160 @@ void CFloatingWnd::DrawTimelineCurve(CDC *pDC, const std::vector<STOCK::Timeline
     DrawVolumeChart(pDC, timelinePoint, dataPoints, realtimeData.prevClosePrice, volumeTop, volumeH, w);
 }
 
+void CFloatingWnd::DrawSummaryHeader(CDC* pDC, const CRect& headerRect, const std::wstring& stockName,
+                                     const std::wstring& stockCode, const STOCK::RealTimeData& realtimeData,
+                                     const std::string& lastTimelineTime, bool hasRealtimeData, bool hasTimelineData)
+{
+    CRect bgRect(headerRect);
+    pDC->FillSolidRect(bgRect, RGB(247, 249, 252));
+
+    CPen dividerPen(PS_SOLID, 1, RGB(228, 232, 238));
+    CPen* oldPen = pDC->SelectObject(&dividerPen);
+    pDC->MoveTo(headerRect.left, headerRect.bottom - 1);
+    pDC->LineTo(headerRect.right, headerRect.bottom - 1);
+    pDC->SelectObject(oldPen);
+
+    const int padding = g_data.RDPI(8);
+    const int lineHeight = g_data.RDPI(16);
+    const CRect closeButtonRect = GetCloseButtonRect(headerRect);
+
+    CString title;
+    if (!stockName.empty() && !stockCode.empty())
+    {
+        title.Format(L"%s (%s)", stockName.c_str(), stockCode.c_str());
+    }
+    else if (!stockName.empty())
+    {
+        title = stockName.c_str();
+    }
+    else if (!stockCode.empty())
+    {
+        title = stockCode.c_str();
+    }
+    else
+    {
+        title = L"--";
+    }
+
+    CString valueText;
+    if (hasRealtimeData)
+    {
+        valueText.Format(L"%s  %s", realtimeData.displayPrice.c_str(), realtimeData.displayFluctuation.c_str());
+    }
+    else
+    {
+        valueText = L"--  --%";
+    }
+
+    CRect titleRect(headerRect.left + padding, headerRect.top + g_data.RDPI(4),
+                    closeButtonRect.left - g_data.RDPI(6), headerRect.top + g_data.RDPI(4) + lineHeight);
+    CRect valueRect(headerRect.left + padding, headerRect.top + g_data.RDPI(4),
+                    closeButtonRect.left - g_data.RDPI(6), headerRect.top + g_data.RDPI(4) + lineHeight);
+
+    const int valueWidth = pDC->GetTextExtent(valueText).cx;
+    titleRect.right -= valueWidth + g_data.RDPI(10);
+    valueRect.left = (std::max)(valueRect.left, valueRect.right - valueWidth);
+
+    pDC->SetTextColor(RGB(35, 45, 55));
+    pDC->DrawText(title, titleRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
+    pDC->SetTextColor(GetFluctuationColor(realtimeData, hasRealtimeData));
+    pDC->DrawText(valueText, valueRect, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+
+    CString statusLine;
+    CString updateTime = hasTimelineData
+                             ? CString(CCommon::StrToUnicode(lastTimelineTime.c_str()).c_str())
+                             : CString(L"--:--");
+    statusLine.Format(g_data.StringRes(IDS_LAST_UPDATE_TIME), updateTime.GetString());
+
+    CRect statusRect(headerRect.left + padding, headerRect.top + g_data.RDPI(4) + lineHeight,
+                     closeButtonRect.left - g_data.RDPI(6), headerRect.bottom - g_data.RDPI(2));
+    pDC->SetTextColor(StockConstants::COLOR_NEUTRAL);
+    pDC->DrawText(statusLine, statusRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
+
+    DrawCloseButton(pDC, headerRect);
+}
+
+void CFloatingWnd::DrawCenteredStatusText(CDC* pDC, const CRect& drawRect, const CString& statusText, COLORREF textColor)
+{
+    pDC->SetTextColor(textColor);
+    CRect textRect(drawRect);
+    pDC->DrawText(statusText, &textRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+}
+
+STOCK::Price CFloatingWnd::CalculateDisplayPriceLimit(const STOCK::RealTimeData& realtimeData,
+                                                      const std::vector<STOCK::TimelinePoint>& timelinePoint) const
+{
+    STOCK::Price priceLimit = realtimeData.priceLimit;
+    if (priceLimit > 0.0)
+        return priceLimit;
+
+    const STOCK::Price prevClose = realtimeData.prevClosePrice;
+    if (prevClose <= 0.0)
+        return 0.01;
+
+    STOCK::Price maxDiff = 0.0;
+    for (const auto& point : timelinePoint)
+    {
+        maxDiff = (std::max)(maxDiff, std::abs(point.price - prevClose));
+    }
+    maxDiff = (std::max)(maxDiff, std::abs(realtimeData.currentPrice - prevClose));
+
+    if (maxDiff <= 0.0)
+        maxDiff = (std::max)(0.01, prevClose * 0.01);
+
+    return maxDiff;
+}
+
+COLORREF CFloatingWnd::GetFluctuationColor(const STOCK::RealTimeData& realtimeData, bool hasRealtimeData) const
+{
+    if (!hasRealtimeData)
+        return StockConstants::COLOR_NEUTRAL;
+
+    if (realtimeData.currentPrice > realtimeData.prevClosePrice)
+        return StockConstants::COLOR_RISE_TEXT;
+    if (realtimeData.currentPrice < realtimeData.prevClosePrice)
+        return StockConstants::COLOR_FALL_TEXT;
+    return StockConstants::COLOR_NEUTRAL;
+}
+
+CRect CFloatingWnd::GetCloseButtonRect(const CRect& headerRect) const
+{
+    const int buttonSize = g_data.RDPI(18);
+    const int rightPadding = g_data.RDPI(8);
+    const int topPadding = g_data.RDPI(6);
+    return CRect(headerRect.right - rightPadding - buttonSize,
+                 headerRect.top + topPadding,
+                 headerRect.right - rightPadding,
+                 headerRect.top + topPadding + buttonSize);
+}
+
+void CFloatingWnd::DrawCloseButton(CDC* pDC, const CRect& headerRect)
+{
+    const CRect closeButtonRect = GetCloseButtonRect(headerRect);
+    pDC->FillSolidRect(closeButtonRect, RGB(239, 243, 248));
+
+    CPen borderPen(PS_SOLID, 1, RGB(214, 220, 228));
+    CPen* oldPen = pDC->SelectObject(&borderPen);
+    pDC->MoveTo(closeButtonRect.left, closeButtonRect.top);
+    pDC->LineTo(closeButtonRect.right - 1, closeButtonRect.top);
+    pDC->LineTo(closeButtonRect.right - 1, closeButtonRect.bottom - 1);
+    pDC->LineTo(closeButtonRect.left, closeButtonRect.bottom - 1);
+    pDC->LineTo(closeButtonRect.left, closeButtonRect.top);
+    pDC->SelectObject(oldPen);
+
+    pDC->SetTextColor(RGB(88, 96, 108));
+    CRect textRect(closeButtonRect);
+    pDC->DrawText(L"x", &textRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+}
+
+void CFloatingWnd::RequestClose()
+{
+    if (m_transparentWnd.GetSafeHwnd())
+    {
+        m_transparentWnd.PostMessage(TWND_MSG_CLOSE_OWNER, 0, 0);
+    }
+}
+
 void CFloatingWnd::OnPaint()
 {
     CPaintDC dc(this);
@@ -322,55 +481,90 @@ void CFloatingWnd::OnPaint()
     memDC.FillSolidRect(rect, StockConstants::KLINE_BACKGROUND);
     memDC.SetBkMode(TRANSPARENT);
 
-    int x = rect.left, y = rect.top, totalH = rect.Height(), w = rect.Width();
+    const int totalH = rect.Height();
+    const int w = rect.Width();
+    const int headerH = (std::max)(g_data.RDPI(44), totalH / 6);
 
-    // 分区计算
-    int timelineH = static_cast<int>(totalH * StockConstants::TIMELINE_HEIGHT_RATIO);
-    int h = timelineH;
+    CRect headerRect(rect.left, rect.top, rect.right, rect.top + headerH);
+    CRect contentRect(rect.left, headerRect.bottom, rect.right, rect.bottom);
+    if (contentRect.Height() <= 0)
+        contentRect = rect;
 
-    // 绘制网格
-    DrawGrid(&memDC, w, h, timelineH);
-
-    // 获取数据
+    // 获取数据（复制快照避免长时间持锁）
     STOCK::RealTimeData realtimeData;
     std::vector<STOCK::TimelinePoint> timelinePoint;
+    std::wstring stockName;
+    std::wstring stockCode;
+    bool hasStockData = false;
+    bool hasRealtimeData = false;
     {
-        // 线程安全：先获取 stockId 的副本
         std::wstring stockId;
         {
             std::lock_guard<std::mutex> lock(m_stockIdMutex);
             stockId = m_stockId;
         }
 
+        stockCode = stockId;
         std::lock_guard<std::mutex> lock(g_data.GetStockDataMutex());
         auto stockData = g_data.GetStockData(stockId);
-        if (stockData == nullptr)
+        if (stockData != nullptr)
         {
-            dc.BitBlt(0, 0, rect.Width(), rect.Height(), &memDC, 0, 0, SRCCOPY);
-            memDC.SelectObject(pOldBitmap);
-            return;
+            hasStockData = true;
+            stockCode = stockData->info.code;
+            stockName = stockData->GetDisplayName();
+            realtimeData = stockData->realTimeData;
+            hasRealtimeData = (realtimeData.currentPrice > 0 && realtimeData.prevClosePrice > 0);
+            auto timeline = stockData->getTimelineData();
+            if (timeline != nullptr)
+                timelinePoint = timeline->data;
         }
-        realtimeData = stockData->realTimeData;
-        auto timeline = stockData->getTimelineData();
-        if (timeline != nullptr)
-            timelinePoint = timeline->data;
     }
 
-    if (!timelinePoint.empty())
+    const bool hasTimelineData = !timelinePoint.empty();
+    const std::string lastTimelineTime = hasTimelineData ? timelinePoint.back().time : "";
+
+    DrawSummaryHeader(&memDC, headerRect, stockName, stockCode, realtimeData,
+                      lastTimelineTime, hasRealtimeData, hasTimelineData);
+
+    int savedDC = memDC.SaveDC();
+    memDC.SetViewportOrg(contentRect.left, contentRect.top);
+    const int contentW = contentRect.Width();
+    const int contentH = contentRect.Height();
+    const int timelineH = static_cast<int>(contentH * StockConstants::TIMELINE_HEIGHT_RATIO);
+
+    DrawGrid(&memDC, contentW, timelineH, timelineH);
+
+    if (hasTimelineData)
     {
-        DrawPriceLabels(&memDC, realtimeData, w, timelineH);
-        DrawTimelineCurve(&memDC, timelinePoint, realtimeData, x, y, w, h);
+        const STOCK::Price displayPriceLimit = CalculateDisplayPriceLimit(realtimeData, timelinePoint);
+        DrawPriceLabels(&memDC, realtimeData, contentW, timelineH, displayPriceLimit);
+        DrawTimelineCurve(&memDC, timelinePoint, realtimeData, 0, 0, contentW, timelineH, displayPriceLimit);
     }
     else
     {
-        CString loadingText;
+        CString statusText;
         {
             std::lock_guard<std::mutex> lock(m_loadingTextMutex);
-            loadingText = m_loadingStateText;
+            statusText = m_loadingStateText;
         }
-        memDC.SetTextColor(StockConstants::COLOR_NEUTRAL);
-        memDC.TextOut((w - memDC.GetTextExtent(loadingText).cx) / 2, g_data.RDPI(10), loadingText);
+
+        if (statusText.IsEmpty())
+        {
+            statusText = g_data.StringRes(IDS_LOADING).GetString();
+        }
+        if (hasStockData && hasRealtimeData && !m_isThreadRunning.load())
+        {
+            statusText = g_data.StringRes(IDS_TIMELINE_NO_DATA);
+        }
+        else if (!hasStockData || !hasRealtimeData)
+        {
+            statusText = g_data.StringRes(IDS_WAITING_REALTIME_DATA);
+        }
+
+        CRect statusRect(0, 0, contentW, contentH);
+        DrawCenteredStatusText(&memDC, statusRect, statusText, StockConstants::COLOR_NEUTRAL);
     }
+    memDC.RestoreDC(savedDC);
 
     // 复制到屏幕
     dc.BitBlt(0, 0, rect.Width(), rect.Height(), &memDC, 0, 0, SRCCOPY);
@@ -444,6 +638,27 @@ BOOL CFloatingWnd::OnEraseBkgnd(CDC *pDC)
 
 void CFloatingWnd::OnLButtonDown(UINT nFlags, CPoint point)
 {
+    CRect clientRect;
+    GetClientRect(&clientRect);
+    const int headerH = (std::max)(g_data.RDPI(44), clientRect.Height() / 6);
+    const CRect headerRect(clientRect.left, clientRect.top, clientRect.right, clientRect.top + headerH);
+    if (GetCloseButtonRect(headerRect).PtInRect(point))
+    {
+        RequestClose();
+        return;
+    }
+
+    CWnd::OnLButtonDown(nFlags, point);
+}
+
+void CFloatingWnd::OnActivate(UINT nState, CWnd* pWndOther, BOOL bMinimized)
+{
+    CWnd::OnActivate(nState, pWndOther, bMinimized);
+
+    if (nState == WA_INACTIVE && !m_isDestroying.load())
+    {
+        RequestClose();
+    }
 }
 
 void CFloatingWnd::RequestData()

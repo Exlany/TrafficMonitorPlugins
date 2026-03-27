@@ -5,8 +5,10 @@
 
 BEGIN_MESSAGE_MAP(CTransparentWnd, CWnd)
 ON_WM_LBUTTONDOWN()
+ON_WM_RBUTTONDOWN()
 ON_WM_ERASEBKGND()
 ON_WM_CREATE()
+ON_MESSAGE(TWND_MSG_CLOSE_OWNER, OnRequestCloseOwner)
 END_MESSAGE_MAP()
 
 int CTransparentWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
@@ -46,7 +48,9 @@ void CTransparentWnd::OnLButtonDown(UINT nFlags, CPoint point)
         else
         {
             // 如果点击在浮动窗口内部，将消息传递给浮动窗口
-            m_pParent->SendMessage(WM_LBUTTONDOWN, nFlags, MAKELPARAM(point.x, point.y));
+            CPoint clientPoint(ptScreen);
+            m_pParent->ScreenToClient(&clientPoint);
+            m_pParent->SendMessage(WM_LBUTTONDOWN, nFlags, MAKELPARAM(clientPoint.x, clientPoint.y));
         }
     }
     // else
@@ -56,7 +60,24 @@ void CTransparentWnd::OnLButtonDown(UINT nFlags, CPoint point)
     // }
 }
 
+void CTransparentWnd::OnRButtonDown(UINT nFlags, CPoint point)
+{
+    OnLButtonDown(nFlags, point);
+}
+
 BOOL CTransparentWnd::OnEraseBkgnd(CDC *pDC)
 {
     return TRUE; // 不擦除背景
+}
+
+LRESULT CTransparentWnd::OnRequestCloseOwner(WPARAM wParam, LPARAM lParam)
+{
+    UNREFERENCED_PARAMETER(wParam);
+    UNREFERENCED_PARAMETER(lParam);
+
+    if (m_pParent && m_pParent->GetSafeHwnd())
+    {
+        Stock::Instance().DestroyFloatingWnd();
+    }
+    return 0;
 }

@@ -11,6 +11,17 @@
 #include <Windows.h>
 #include <algorithm>
 
+namespace
+{
+template<typename T>
+T ClampValue(T value, T minValue, T maxValue, T fallback)
+{
+    if (value < minValue || value > maxValue)
+        return fallback;
+    return value;
+}
+}
+
 // CManagerDialog 对话框
 
 IMPLEMENT_DYNAMIC(CManagerDialog, CDialog)
@@ -34,6 +45,8 @@ BEGIN_MESSAGE_MAP(CManagerDialog, CDialog)
 ON_LBN_SELCHANGE(IDC_MGR_LIST, &CManagerDialog::OnListItemClick)
 ON_BN_CLICKED(IDC_MGR_DEL_BTN, &CManagerDialog::OnDelBtnClick)
 ON_BN_CLICKED(IDC_MGR_ADD_BTN, &CManagerDialog::OnAddBtnClick)
+ON_BN_CLICKED(IDC_MGR_UP_BTN, &CManagerDialog::OnMoveUpBtnClick)
+ON_BN_CLICKED(IDC_MGR_DOWN_BTN, &CManagerDialog::OnMoveDownBtnClick)
 ON_BN_CLICKED(IDC_FULL_DAY_CHECK, &CManagerDialog::OnClickedFullDayCheck)
 ON_BN_CLICKED(IDOK, &CManagerDialog::OnBnClickedOk)
 ON_BN_CLICKED(IDCANCEL, &CManagerDialog::OnBnClickedCancel)
@@ -41,6 +54,8 @@ ON_LBN_DBLCLK(IDC_MGR_LIST, &CManagerDialog::OnLbnDblclkMgrList)
 ON_WM_GETMINMAXINFO()
 ON_BN_CLICKED(IDC_SHOW_STOCK_NAME_CHECK, &CManagerDialog::OnBnClickedShowStockNameCheck)
 ON_BN_CLICKED(IDC_COLOR_WITH_PRICE_CHECK, &CManagerDialog::OnBnClickedColorWithPriceCheck)
+ON_BN_CLICKED(IDC_ENABLE_PRICE_ALERT_CHECK, &CManagerDialog::OnBnClickedEnablePriceAlertCheck)
+ON_CBN_SELCHANGE(IDC_DISPLAY_MODE_COMBO, &CManagerDialog::OnCbnSelchangeDisplayModeCombo)
 END_MESSAGE_MAP()
 
 // CManagerDialog 消息处理程序
@@ -57,19 +72,13 @@ BOOL CManagerDialog::OnInitDialog()
     m_min_size.cx = rect.Width();
     m_min_size.cy = rect.Height();
 
-    for (const auto &stock_code : m_data.stockCodes)
-    {
-        m_stock_listbox.AddString(stock_code.c_str());
-    }
-
-    for (int i = 0; i < m_stock_listbox.GetCount(); i++)
-    {
-        m_stock_listbox.SetItemHeight(i, g_data.DPI(20));
-    }
+    RefreshStockList();
 
     CheckDlgButton(IDC_FULL_DAY_CHECK, m_data.fullDay);
     CheckDlgButton(IDC_SHOW_STOCK_NAME_CHECK, m_data.showStockName);
     CheckDlgButton(IDC_COLOR_WITH_PRICE_CHECK, m_data.colorWithPrice);
+    CheckDlgButton(IDC_SHOW_STATUS_MARKER_CHECK, m_data.showStatusMarker);
+    CheckDlgButton(IDC_ENABLE_PRICE_ALERT_CHECK, m_data.enablePriceAlert);
 
     // 初始化价格小数位数下拉框
     CComboBox* pCombo = (CComboBox*)GetDlgItem(IDC_PRICE_DECIMAL_COMBO);
@@ -89,12 +98,34 @@ BOOL CManagerDialog::OnInitDialog()
     CString intervalStr;
     intervalStr.Format(_T("%d"), m_data.carouselInterval);
     SetDlgItemText(IDC_CAROUSEL_INTERVAL_EDIT, intervalStr);
+    intervalStr.Format(_T("%d"), m_data.alertChangePercent);
+    SetDlgItemText(IDC_ALERT_THRESHOLD_EDIT, intervalStr);
+    intervalStr.Format(_T("%d"), m_data.tooltipMaxItems);
+    SetDlgItemText(IDC_TOOLTIP_MAX_ITEMS_EDIT, intervalStr);
 
     CString value;
     value.Format(_T("%d"), static_cast<int>(m_data.klineWidth));
     SetDlgItemText(IDC_KLINE_WIDTH_EDIT, value);
     value.Format(_T("%d"), static_cast<int>(m_data.klineHeight));
     SetDlgItemText(IDC_KLINE_HEIGHT_EDIT, value);
+    CWnd* pWidthEdit = GetDlgItem(IDC_KLINE_WIDTH_EDIT);
+    if (pWidthEdit != nullptr)
+        pWidthEdit->SendMessage(EM_LIMITTEXT, 4, 0);
+    CWnd* pHeightEdit = GetDlgItem(IDC_KLINE_HEIGHT_EDIT);
+    if (pHeightEdit != nullptr)
+        pHeightEdit->SendMessage(EM_LIMITTEXT, 4, 0);
+    CWnd* pCarouselEdit = GetDlgItem(IDC_CAROUSEL_INTERVAL_EDIT);
+    if (pCarouselEdit != nullptr)
+        pCarouselEdit->SendMessage(EM_LIMITTEXT, 2, 0);
+    CWnd* pAlertEdit = GetDlgItem(IDC_ALERT_THRESHOLD_EDIT);
+    if (pAlertEdit != nullptr)
+        pAlertEdit->SendMessage(EM_LIMITTEXT, 2, 0);
+    CWnd* pTooltipEdit = GetDlgItem(IDC_TOOLTIP_MAX_ITEMS_EDIT);
+    if (pTooltipEdit != nullptr)
+        pTooltipEdit->SendMessage(EM_LIMITTEXT, 2, 0);
+    UpdateDisplayModeControls();
+    UpdateAlertControls();
+    UpdateActionButtonState();
 
     return TRUE; // return TRUE unless you set the focus to a control
                  // 异常: OCX 属性页应返回 FALSE
@@ -102,12 +133,7 @@ BOOL CManagerDialog::OnInitDialog()
 
 void CManagerDialog::OnListItemClick()
 {
-    CString curSelTxt;
-    int curSelPos;
-
-    curSelPos = m_stock_listbox.GetCurSel();
-    m_stock_listbox.GetText(curSelPos, curSelTxt);
-    TRACE(L"OnListItemClick: %s\n", curSelTxt.GetString());
+    UpdateActionButtonState();
 }
 
 void CManagerDialog::OnDelBtnClick()
@@ -118,8 +144,10 @@ void CManagerDialog::OnDelBtnClick()
     {
         return;
     }
+    m_data.aliases.erase(m_data.stockCodes[curSelPos]);
     m_stock_listbox.DeleteString(curSelPos);
     m_data.stockCodes.erase(m_data.stockCodes.begin() + curSelPos);
+    RefreshStockList((std::min)(curSelPos, m_stock_listbox.GetCount() - 1));
 }
 
 void CManagerDialog::OnAddBtnClick()
@@ -136,14 +164,15 @@ void CManagerDialog::OnAddBtnClick()
         std::wstring stock_code = dlg.m_stock_code.GetString();
         if (!stock_code.empty())
         {
-            if (std::count(m_data.stockCodes.begin(), m_data.stockCodes.end(), stock_code))
+            auto duplicate = std::find(m_data.stockCodes.begin(), m_data.stockCodes.end(), stock_code);
+            if (duplicate != m_data.stockCodes.end())
             {
-                TRACE(L"OnAddBtnClick: ignore %s\n", stock_code.c_str());
+                m_stock_listbox.SetCurSel(static_cast<int>(std::distance(m_data.stockCodes.begin(), duplicate)));
+                UpdateActionButtonState();
                 return;
             }
             TRACE(L"OnAddBtnClick: %s\n", stock_code.c_str());
             m_data.stockCodes.push_back(stock_code.c_str());
-            m_stock_listbox.AddString(stock_code.c_str());
 
             // 保存别名
             std::wstring alias = dlg.m_stock_alias.GetString();
@@ -151,8 +180,37 @@ void CManagerDialog::OnAddBtnClick()
             {
                 m_data.aliases[stock_code] = alias;
             }
+            else
+            {
+                m_data.aliases.erase(stock_code);
+            }
+            RefreshStockList(static_cast<int>(m_data.stockCodes.size()) - 1);
         }
     }
+}
+
+void CManagerDialog::OnMoveUpBtnClick()
+{
+    const int curSelPos = m_stock_listbox.GetCurSel();
+    if (curSelPos <= 0 || static_cast<size_t>(curSelPos) >= m_data.stockCodes.size())
+    {
+        return;
+    }
+
+    std::swap(m_data.stockCodes[curSelPos], m_data.stockCodes[curSelPos - 1]);
+    RefreshStockList(curSelPos - 1);
+}
+
+void CManagerDialog::OnMoveDownBtnClick()
+{
+    const int curSelPos = m_stock_listbox.GetCurSel();
+    if (curSelPos < 0 || static_cast<size_t>(curSelPos + 1) >= m_data.stockCodes.size())
+    {
+        return;
+    }
+
+    std::swap(m_data.stockCodes[curSelPos], m_data.stockCodes[curSelPos + 1]);
+    RefreshStockList(curSelPos + 1);
 }
 
 void CManagerDialog::OnClickedFullDayCheck()
@@ -170,15 +228,18 @@ void CManagerDialog::OnBnClickedColorWithPriceCheck()
     m_data.colorWithPrice = (IsDlgButtonChecked(IDC_COLOR_WITH_PRICE_CHECK) != 0);
 }
 
+void CManagerDialog::OnBnClickedEnablePriceAlertCheck()
+{
+    UpdateAlertControls();
+}
+
 void CManagerDialog::OnBnClickedOk()
 {
-    SettingsSnapshot oldSettings = g_data.GetSettingsSnapshot();
-    bool stock_code_changed{oldSettings.stockCodes != m_data.stockCodes};
     CString value;
     GetDlgItemText(IDC_KLINE_WIDTH_EDIT, value);
-    m_data.klineWidth = _ttoi(value);
+    m_data.klineWidth = ClampValue<unsigned int>(_ttoi(value), 100, 2000, StockConstants::DEFAULT_KLINE_WIDTH);
     GetDlgItemText(IDC_KLINE_HEIGHT_EDIT, value);
-    m_data.klineHeight = _ttoi(value);
+    m_data.klineHeight = ClampValue<unsigned int>(_ttoi(value), 50, 1000, StockConstants::DEFAULT_KLINE_HEIGHT);
 
     // 保存价格小数位数
     CComboBox* pCombo = (CComboBox*)GetDlgItem(IDC_PRICE_DECIMAL_COMBO);
@@ -191,17 +252,35 @@ void CManagerDialog::OnBnClickedOk()
     // 保存轮播间隔
     CString intervalStr;
     GetDlgItemText(IDC_CAROUSEL_INTERVAL_EDIT, intervalStr);
-    m_data.carouselInterval = _ttoi(intervalStr);
-    if (m_data.carouselInterval < 1)
-        m_data.carouselInterval = 1;  // 最小1秒
+    m_data.carouselInterval = ClampValue<int>(_ttoi(intervalStr), 1, 60, StockConstants::DEFAULT_CAROUSEL_INTERVAL);
+    m_data.showStatusMarker = (IsDlgButtonChecked(IDC_SHOW_STATUS_MARKER_CHECK) != 0);
+    m_data.enablePriceAlert = (IsDlgButtonChecked(IDC_ENABLE_PRICE_ALERT_CHECK) != 0);
 
-    g_data.UpdateSettings(m_data);
-    g_data.SaveConfig();
-    if (stock_code_changed)
-    {
-        Stock::Instance().SendStockInfoRequest();
-        MessageBox(g_data.StringRes(IDS_CHANGE_STOCK_TIP), g_data.StringRes(IDS_PLUGIN_NAME), MB_ICONINFORMATION | MB_OK);
-    }
+    CString thresholdStr;
+    GetDlgItemText(IDC_ALERT_THRESHOLD_EDIT, thresholdStr);
+    m_data.alertChangePercent = ClampValue<int>(_ttoi(thresholdStr),
+        StockConstants::MIN_ALERT_CHANGE_PERCENT,
+        StockConstants::MAX_ALERT_CHANGE_PERCENT,
+        StockConstants::DEFAULT_ALERT_CHANGE_PERCENT);
+
+    CString tooltipMaxItemsStr;
+    GetDlgItemText(IDC_TOOLTIP_MAX_ITEMS_EDIT, tooltipMaxItemsStr);
+    m_data.tooltipMaxItems = ClampValue<int>(_ttoi(tooltipMaxItemsStr),
+        StockConstants::MIN_TOOLTIP_MAX_ITEMS,
+        StockConstants::MAX_TOOLTIP_MAX_ITEMS,
+        StockConstants::DEFAULT_TOOLTIP_MAX_ITEMS);
+
+    value.Format(_T("%u"), m_data.klineWidth);
+    SetDlgItemText(IDC_KLINE_WIDTH_EDIT, value);
+    value.Format(_T("%u"), m_data.klineHeight);
+    SetDlgItemText(IDC_KLINE_HEIGHT_EDIT, value);
+    intervalStr.Format(_T("%d"), m_data.carouselInterval);
+    SetDlgItemText(IDC_CAROUSEL_INTERVAL_EDIT, intervalStr);
+    thresholdStr.Format(_T("%d"), m_data.alertChangePercent);
+    SetDlgItemText(IDC_ALERT_THRESHOLD_EDIT, thresholdStr);
+    tooltipMaxItemsStr.Format(_T("%d"), m_data.tooltipMaxItems);
+    SetDlgItemText(IDC_TOOLTIP_MAX_ITEMS_EDIT, tooltipMaxItemsStr);
+
     CDialog::OnOK();
 }
 
@@ -223,9 +302,14 @@ void CManagerDialog::OnLbnDblclkMgrList()
             if (!dlg.m_stock_code.IsEmpty())
             {
                 std::wstring new_code = dlg.m_stock_code.GetString();
+                auto duplicate = std::find(m_data.stockCodes.begin(), m_data.stockCodes.end(), new_code);
+                if (duplicate != m_data.stockCodes.end() && static_cast<size_t>(std::distance(m_data.stockCodes.begin(), duplicate)) != static_cast<size_t>(index))
+                {
+                    m_stock_listbox.SetCurSel(static_cast<int>(std::distance(m_data.stockCodes.begin(), duplicate)));
+                    UpdateActionButtonState();
+                    return;
+                }
                 m_data.stockCodes[index] = new_code;
-                m_stock_listbox.DeleteString(index);
-                m_stock_listbox.InsertString(index, dlg.m_stock_code);
 
                 // 更新别名
                 m_data.aliases.erase(old_code);
@@ -234,6 +318,7 @@ void CManagerDialog::OnLbnDblclkMgrList()
                 {
                     m_data.aliases[new_code] = alias;
                 }
+                RefreshStockList(index);
             }
         }
     }
@@ -246,4 +331,92 @@ void CManagerDialog::OnGetMinMaxInfo(MINMAXINFO *lpMMI)
     lpMMI->ptMinTrackSize.y = m_min_size.cy; // 设置最小高度
 
     CDialog::OnGetMinMaxInfo(lpMMI);
+}
+
+void CManagerDialog::RefreshStockList(int selectedIndex)
+{
+    m_stock_listbox.ResetContent();
+    for (const auto& stock_code : m_data.stockCodes)
+    {
+        m_stock_listbox.AddString(FormatStockListEntry(stock_code));
+    }
+
+    for (int i = 0; i < m_stock_listbox.GetCount(); ++i)
+    {
+        m_stock_listbox.SetItemHeight(i, g_data.DPI(20));
+    }
+
+    if (selectedIndex >= 0 && selectedIndex < m_stock_listbox.GetCount())
+    {
+        m_stock_listbox.SetCurSel(selectedIndex);
+    }
+    UpdateDisplayModeControls();
+    UpdateActionButtonState();
+}
+
+void CManagerDialog::UpdateDisplayModeControls()
+{
+    CComboBox* pModeCombo = (CComboBox*)GetDlgItem(IDC_DISPLAY_MODE_COMBO);
+    if (pModeCombo == nullptr)
+        return;
+
+    const bool enableCarouselInterval = (pModeCombo->GetCurSel() == static_cast<int>(StockDisplayMode::Carousel) &&
+        m_data.stockCodes.size() > 1);
+    CWnd* pIntervalEdit = GetDlgItem(IDC_CAROUSEL_INTERVAL_EDIT);
+    if (pIntervalEdit != nullptr)
+    {
+        pIntervalEdit->EnableWindow(enableCarouselInterval);
+    }
+}
+
+void CManagerDialog::UpdateActionButtonState()
+{
+    const int curSel = m_stock_listbox.GetCurSel();
+    const int count = m_stock_listbox.GetCount();
+    const bool hasSelection = (curSel >= 0 && curSel < count);
+
+    CWnd* pDeleteButton = GetDlgItem(IDC_MGR_DEL_BTN);
+    if (pDeleteButton != nullptr)
+    {
+        pDeleteButton->EnableWindow(hasSelection);
+    }
+
+    CWnd* pUpButton = GetDlgItem(IDC_MGR_UP_BTN);
+    if (pUpButton != nullptr)
+    {
+        pUpButton->EnableWindow(hasSelection && curSel > 0);
+    }
+
+    CWnd* pDownButton = GetDlgItem(IDC_MGR_DOWN_BTN);
+    if (pDownButton != nullptr)
+    {
+        pDownButton->EnableWindow(hasSelection && curSel < count - 1);
+    }
+}
+
+void CManagerDialog::UpdateAlertControls()
+{
+    const bool enableAlert = (IsDlgButtonChecked(IDC_ENABLE_PRICE_ALERT_CHECK) != 0);
+    CWnd* pThresholdEdit = GetDlgItem(IDC_ALERT_THRESHOLD_EDIT);
+    if (pThresholdEdit != nullptr)
+    {
+        pThresholdEdit->EnableWindow(enableAlert);
+    }
+}
+
+CString CManagerDialog::FormatStockListEntry(const std::wstring& code) const
+{
+    auto aliasIt = m_data.aliases.find(code);
+    if (aliasIt != m_data.aliases.end() && !aliasIt->second.empty())
+    {
+        CString text;
+        text.Format(_T("%s (%s)"), aliasIt->second.c_str(), code.c_str());
+        return text;
+    }
+    return code.c_str();
+}
+
+void CManagerDialog::OnCbnSelchangeDisplayModeCombo()
+{
+    UpdateDisplayModeControls();
 }

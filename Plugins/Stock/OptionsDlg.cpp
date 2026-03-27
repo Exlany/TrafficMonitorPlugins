@@ -7,11 +7,56 @@
 #include "afxdialogex.h"
 #include "DataManager.h"
 #include "Common.h"
+#include "StockMappings.h"
 
 using namespace StockConstants;
 
 // 支持的市场类型集合
 static const std::vector<CString> StockTypeSet{kSH, kSZ, kHK, kMG, kMGI, kBJ, kOKX, kBN, kFX, kHF};
+
+namespace
+{
+bool IsOtherSupportedPrefix(const CString& type)
+{
+    return type == kMGI || type == kBN || type == kFX || type == kHF;
+}
+
+bool IsAllDigits(const CString& code)
+{
+    if (code.IsEmpty())
+        return false;
+
+    for (int i = 0; i < code.GetLength(); ++i)
+    {
+        if (!_istdigit(code[i]))
+            return false;
+    }
+    return true;
+}
+
+bool IsUsSymbol(const CString& code)
+{
+    if (code.IsEmpty())
+        return false;
+
+    for (int i = 0; i < code.GetLength(); ++i)
+    {
+        const TCHAR ch = code[i];
+        if (_istalnum(ch) || ch == _T('.') || ch == _T('-'))
+            continue;
+        return false;
+    }
+    return true;
+}
+
+void PadLeftDigits(CString& code, int targetLength)
+{
+    while (code.GetLength() < targetLength)
+    {
+        code = _T("0") + code;
+    }
+}
+}
 
 // COptionsDlg 对话框
 
@@ -101,9 +146,18 @@ BOOL COptionsDlg::OnInitDialog()
         UpdateData(FALSE);
     }
 
-    RemoveTypeFromCode(m_stock_code);
+    if (m_radio_stock_types != 6)
+    {
+        RemoveTypeFromCode(m_stock_code);
+    }
     SetDlgItemText(IDC_CODE_EDIT, m_stock_code);
     SetDlgItemText(IDC_ALIAS_EDIT, m_stock_alias);
+    m_code_edit.SetLimitText(64);
+    CWnd* pAliasEdit = GetDlgItem(IDC_ALIAS_EDIT);
+    if (pAliasEdit != nullptr)
+    {
+        pAliasEdit->SendMessage(EM_LIMITTEXT, 32, 0);
+    }
 
     return TRUE;  // return TRUE unless you set the focus to a control
                   // 异常: OCX 属性页应返回 FALSE
@@ -156,6 +210,31 @@ int COptionsDlg::AutoDetectStockType(const CString& code)
 {
     if (code.IsEmpty())
         return 6; // 其他
+
+    CString explicitType = GetCodeType(code);
+    if (!explicitType.IsEmpty())
+    {
+        if (explicitType == kSZ)
+            return 0;
+        if (explicitType == kHK)
+            return 1;
+        if (explicitType == kBJ)
+            return 2;
+        if (explicitType == kSH)
+            return 3;
+        if (explicitType == kMG)
+            return 4;
+        if (explicitType == kOKX)
+            return 5;
+        return 6;
+    }
+
+    const std::wstring smartCode = StockMappings::SmartStockCode(std::wstring(code));
+    CString smartType = GetCodeType(smartCode.c_str());
+    if (IsOtherSupportedPrefix(smartType))
+    {
+        return 6;
+    }
 
     // 先移除可能存在的前缀
     CString pureCode = code;
@@ -219,6 +298,7 @@ void COptionsDlg::OnBnClickedOk()
 {
     CString code;
     GetDlgItemText(IDC_CODE_EDIT, code);
+    code.Trim();
     if (code.IsEmpty())
     {
         CDialog::OnCancel();
@@ -229,35 +309,98 @@ void COptionsDlg::OnBnClickedOk()
     {
     case 0:
         type = kSZ;
+        if (!IsAllDigits(code) || code.GetLength() > 6)
+        {
+            MessageBox(g_data.StringRes(IDS_NUMERIC_STOCK_CODE_TIP), g_data.StringRes(IDS_PLUGIN_NAME), MB_ICONWARNING | MB_OK);
+            return;
+        }
+        if (IsAllDigits(code) && code.GetLength() < 6)
+            PadLeftDigits(code, 6);
         break;
     case 1:
         type = kHK;
+        if (!IsAllDigits(code) || code.GetLength() > 5)
+        {
+            MessageBox(g_data.StringRes(IDS_NUMERIC_STOCK_CODE_TIP), g_data.StringRes(IDS_PLUGIN_NAME), MB_ICONWARNING | MB_OK);
+            return;
+        }
+        if (IsAllDigits(code) && code.GetLength() < 5)
+            PadLeftDigits(code, 5);
         break;
     case 2:
         type = kBJ;
+        if (!IsAllDigits(code) || code.GetLength() > 6)
+        {
+            MessageBox(g_data.StringRes(IDS_NUMERIC_STOCK_CODE_TIP), g_data.StringRes(IDS_PLUGIN_NAME), MB_ICONWARNING | MB_OK);
+            return;
+        }
+        if (IsAllDigits(code) && code.GetLength() < 6)
+            PadLeftDigits(code, 6);
         break;
     case 3:
         type = kSH;
+        if (!IsAllDigits(code) || code.GetLength() > 6)
+        {
+            MessageBox(g_data.StringRes(IDS_NUMERIC_STOCK_CODE_TIP), g_data.StringRes(IDS_PLUGIN_NAME), MB_ICONWARNING | MB_OK);
+            return;
+        }
+        if (IsAllDigits(code) && code.GetLength() < 6)
+            PadLeftDigits(code, 6);
         break;
     case 4:
         type = kMG;
+        if (!IsUsSymbol(code))
+        {
+            MessageBox(g_data.StringRes(IDS_US_STOCK_CODE_TIP), g_data.StringRes(IDS_PLUGIN_NAME), MB_ICONWARNING | MB_OK);
+            return;
+        }
+        code.MakeLower();
         break;
     case 5:
         type = kOKX;
         // 将 / 替换为 - (如 BTC/USDT -> BTC-USDT)
         code.Replace(_T('/'), _T('-'));
+        code.MakeUpper();
         // OKX 需要交易对格式，如果用户只输入了币种名称，自动补全 -USDT
         if (code.Find(_T('-')) == -1)
         {
             code += _T("-USDT");
         }
         break;
+    case 6:
+    {
+        CString explicitType = GetCodeType(code);
+        if (explicitType.IsEmpty())
+        {
+            const std::wstring smartCode = StockMappings::SmartStockCode(std::wstring(code));
+            CString resolvedCode(smartCode.c_str());
+            CString resolvedType = GetCodeType(resolvedCode);
+            if (IsOtherSupportedPrefix(resolvedType))
+            {
+                m_stock_code = resolvedCode;
+            }
+            else
+            {
+                MessageBox(g_data.StringRes(IDS_OTHER_STOCK_PREFIX_TIP), g_data.StringRes(IDS_PLUGIN_NAME), MB_ICONWARNING | MB_OK);
+                return;
+            }
+        }
+        else
+        {
+            m_stock_code = code;
+        }
+        GetDlgItemText(IDC_ALIAS_EDIT, m_stock_alias);
+        m_stock_alias.Trim();
+        CDialog::OnOK();
+        return;
+    }
     }
     RemoveTypeFromCode(code);
     m_stock_code = type + code;
 
     // 获取别名
     GetDlgItemText(IDC_ALIAS_EDIT, m_stock_alias);
+    m_stock_alias.Trim();
 
     CDialog::OnOK();
 }

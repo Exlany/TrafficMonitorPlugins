@@ -178,6 +178,21 @@ void CDataManager::LoadConfig(const std::wstring &config_dir)
     snapshot.carouselInterval = (carousel_interval >= 1 && carousel_interval <= 60) ? carousel_interval : 5;
 
     snapshot.checkUpdate = ini.GetBool(L"config", L"check_update", true);
+    snapshot.enablePriceAlert = ini.GetBool(L"config", L"enable_price_alert", false);
+
+    int alert_change_percent = ini.GetInt(L"config", L"alert_change_percent", StockConstants::DEFAULT_ALERT_CHANGE_PERCENT);
+    snapshot.alertChangePercent = (alert_change_percent >= StockConstants::MIN_ALERT_CHANGE_PERCENT &&
+        alert_change_percent <= StockConstants::MAX_ALERT_CHANGE_PERCENT)
+        ? alert_change_percent
+        : StockConstants::DEFAULT_ALERT_CHANGE_PERCENT;
+
+    int tooltip_max_items = ini.GetInt(L"config", L"tooltip_max_items", StockConstants::DEFAULT_TOOLTIP_MAX_ITEMS);
+    snapshot.tooltipMaxItems = (tooltip_max_items >= StockConstants::MIN_TOOLTIP_MAX_ITEMS &&
+        tooltip_max_items <= StockConstants::MAX_TOOLTIP_MAX_ITEMS)
+        ? tooltip_max_items
+        : StockConstants::DEFAULT_TOOLTIP_MAX_ITEMS;
+
+    snapshot.showStatusMarker = ini.GetBool(L"config", L"show_status_marker", true);
 
     // 加载自定义别名
     std::vector<std::wstring> alias_list;
@@ -215,6 +230,10 @@ void CDataManager::SaveConfig()
         ini.WriteInt(L"config", L"display_mode", static_cast<int>(settings.displayMode));
         ini.WriteInt(L"config", L"carousel_interval", settings.carouselInterval);
         ini.WriteBool(L"config", L"check_update", settings.checkUpdate);
+        ini.WriteBool(L"config", L"enable_price_alert", settings.enablePriceAlert);
+        ini.WriteInt(L"config", L"alert_change_percent", settings.alertChangePercent);
+        ini.WriteInt(L"config", L"tooltip_max_items", settings.tooltipMaxItems);
+        ini.WriteBool(L"config", L"show_status_marker", settings.showStatusMarker);
 
         // 保存自定义别名
         std::vector<std::wstring> alias_list;

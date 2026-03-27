@@ -71,23 +71,25 @@ BEGIN
     CONTROL         "其他（需要前缀）",IDC_RADIO_OTHER,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,100,65,68,10
 END
 
-IDD_MANAGER_DIALOG DIALOGEX 0, 0, 214, 182
+IDD_MANAGER_DIALOG DIALOGEX 0, 0, 214, 236
 STYLE DS_SETFONT | WS_MAXIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
 CAPTION "股票管理"
 FONT 9, "微软雅黑", 400, 0, 0x0
 BEGIN
-    DEFPUSHBUTTON   "确定",IDOK,115,161,45,14
-    PUSHBUTTON      "取消",IDCANCEL,166,161,45,14
-    PUSHBUTTON      "添加",IDC_MGR_ADD_BTN,17,158,35,14
-    PUSHBUTTON      "删除",IDC_MGR_DEL_BTN,66,158,35,14
+    DEFPUSHBUTTON   "确定",IDOK,115,215,45,14
+    PUSHBUTTON      "取消",IDCANCEL,166,215,45,14
+    PUSHBUTTON      "添加",IDC_MGR_ADD_BTN,17,211,35,14
+    PUSHBUTTON      "删除",IDC_MGR_DEL_BTN,66,211,35,14
     CONTROL         "全天更新",IDC_FULL_DAY_CHECK,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,118,19,59,10
     GROUPBOX        "配置",IDC_STATIC,112,7,98,60
     CONTROL         "显示股票名称",IDC_SHOW_STOCK_NAME_CHECK,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,118,31,59,10
     CONTROL         "涨跌颜色标识",IDC_COLOR_WITH_PRICE_CHECK,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,118,43,59,10
     LTEXT           "价格小数",IDC_STATIC,118,56,35,8
     COMBOBOX        IDC_PRICE_DECIMAL_COMBO,156,54,48,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    GROUPBOX        "股票清单",IDC_STATIC,7,7,103,168
-    LISTBOX         IDC_MGR_LIST,9,18,99,137,LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
+    GROUPBOX        "股票清单",IDC_STATIC,7,7,103,222
+    LISTBOX         IDC_MGR_LIST,9,18,77,190,LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "上移",IDC_MGR_UP_BTN,88,18,20,14
+    PUSHBUTTON      "下移",IDC_MGR_DOWN_BTN,88,34,20,14
     GROUPBOX        "显示模式",IDC_STATIC,112,67,98,44
     COMBOBOX        IDC_DISPLAY_MODE_COMBO,118,78,86,50,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     LTEXT           "轮播间隔",IDC_STATIC,118,95,35,8
@@ -98,6 +100,15 @@ BEGIN
     LTEXT           "高度",IDC_STATIC,118,139,17,8
     GROUPBOX        "走势图",IDC_STATIC,112,111,98,44
     EDITTEXT        IDC_KLINE_WIDTH_EDIT,138,122,40,12,ES_AUTOHSCROLL | ES_NUMBER
+    GROUPBOX        "增强",IDC_STATIC,112,155,98,56
+    CONTROL         "状态标记",IDC_SHOW_STATUS_MARKER_CHECK,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,118,166,45,10
+    CONTROL         "预警",IDC_ENABLE_PRICE_ALERT_CHECK,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,118,177,27,10
+    LTEXT           "阈值",IDC_STATIC,148,179,20,8
+    EDITTEXT        IDC_ALERT_THRESHOLD_EDIT,170,177,22,12,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "%",IDC_STATIC,194,179,8,8
+    LTEXT           "提示",IDC_STATIC,118,193,20,8
+    EDITTEXT        IDC_TOOLTIP_MAX_ITEMS_EDIT,170,191,22,12,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "项",IDC_STATIC,194,193,8,8
 END
 
 
@@ -121,7 +132,7 @@ BEGIN
     BEGIN
         LEFTMARGIN, 7
         TOPMARGIN, 7
-        BOTTOMMARGIN, 119
+        BOTTOMMARGIN, 161
     END
 END
 #endif    // APSTUDIO_INVOKED
@@ -227,6 +238,7 @@ BEGIN
     BEGIN
         MENUITEM "管理股票列表(&O)...",               ID_OPTIONS
         MENUITEM "更新股票信息(&U)",                  ID_UPDATE
+        MENUITEM "切换到下一只(&N)",                  ID_NEXT_STOCK
     END
 END
 
@@ -255,7 +267,7 @@ BEGIN
     IDS_MENU_UPDATE_STOCK   "更新股票信息(&U)"
     IDS_ADD_STOCK           "添加股票"
     IDS_EDIT_STOCK          "编辑股票"
-    IDS_CHANGE_STOCK_TIP    "更新股票列表后需要重新启动TrafficMonitor才能生效。"
+    IDS_CHANGE_STOCK_TIP    "股票列表已更新，插件会在下一轮刷新时自动生效。"
     IDS_STOCK_NUM_LIMIT_WARNING "股票数量已达到上限！"
     IDS_LOAD_FAIL           "加载失败"
     IDS_LOADING             "加载中..."
@@ -269,6 +281,18 @@ BEGIN
     IDS_DISPLAY_MODE_CAROUSEL   "轮播显示"
     IDS_DISPLAY_MODE_MANUAL     "手动选择（双击切换）"
     IDS_DISPLAY_MODE_SMART      "智能模式"
+    IDS_TIMELINE_NO_DATA        "暂无分时数据"
+    IDS_WAITING_REALTIME_DATA   "等待行情数据"
+    IDS_LAST_UPDATE_TIME        "更新时间: %s"
+    IDS_TOOLTIP_MORE_ITEMS      "还有 %u 项..."
+    IDS_OTHER_STOCK_PREFIX_TIP  "其他类型请直接输入带前缀代码，例如 int_nasdaq、hf_GC、fx_susdcnh 或 bn_BTCUSDT。"
+    IDS_MENU_NEXT_STOCK         "切换到下一只(&N)"
+    IDS_NUMERIC_STOCK_CODE_TIP  "当前类型要求输入纯数字代码，A股/北交所为 6 位，港股为 5 位。"
+    IDS_US_STOCK_CODE_TIP       "美股代码仅支持字母、数字、点号和中划线。"
+    IDS_UPDATE_FOUND_AUTO       "Stock插件发现新版本 %s\n当前版本: %s\n\n是否自动下载并更新？\n（更新后将自动重启TrafficMonitor）"
+    IDS_UPDATE_DOWNLOAD_COMPLETE "更新下载完成！\n是否立即重启TrafficMonitor以应用更新？"
+    IDS_UPDATE_AUTO_FAILED      "自动更新失败，是否前往下载页面手动下载？"
+    IDS_UPDATE_FOUND_MANUAL     "Stock插件发现新版本 %s\n当前版本: %s\n\n是否前往下载页面？"
 END
 
 #endif    // 中文(简体，中国) resources
@@ -286,23 +310,25 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 // Dialog
 //
 
-IDD_MANAGER_DIALOG DIALOGEX 0, 0, 214, 182
+IDD_MANAGER_DIALOG DIALOGEX 0, 0, 214, 236
 STYLE DS_SETFONT | WS_MAXIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
 CAPTION "Stock Manage"
 FONT 9, "Segoe UI", 400, 0, 0x0
 BEGIN
-    DEFPUSHBUTTON   "OK",IDOK,115,161,45,14
-    PUSHBUTTON      "Cancel",IDCANCEL,166,161,45,14
-    PUSHBUTTON      "Add",IDC_MGR_ADD_BTN,17,158,35,14
-    PUSHBUTTON      "Remove",IDC_MGR_DEL_BTN,66,158,35,14
+    DEFPUSHBUTTON   "OK",IDOK,115,215,45,14
+    PUSHBUTTON      "Cancel",IDCANCEL,166,215,45,14
+    PUSHBUTTON      "Add",IDC_MGR_ADD_BTN,17,211,35,14
+    PUSHBUTTON      "Remove",IDC_MGR_DEL_BTN,66,211,35,14
     CONTROL         "All day updates",IDC_FULL_DAY_CHECK,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,118,19,69,10
     GROUPBOX        "Configure",IDC_STATIC,112,7,98,60
     CONTROL         "Show stock name",IDC_SHOW_STOCK_NAME_CHECK,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,118,31,69,10
     CONTROL         "Show colors",IDC_COLOR_WITH_PRICE_CHECK,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,118,43,69,10
     LTEXT           "Decimals",IDC_STATIC,118,56,35,8
     COMBOBOX        IDC_PRICE_DECIMAL_COMBO,156,54,48,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    GROUPBOX        "Stock list",IDC_STATIC,7,7,103,168
-    LISTBOX         IDC_MGR_LIST,9,18,99,137,LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
+    GROUPBOX        "Stock list",IDC_STATIC,7,7,103,222
+    LISTBOX         IDC_MGR_LIST,9,18,77,190,LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "Up",IDC_MGR_UP_BTN,88,18,20,14
+    PUSHBUTTON      "Down",IDC_MGR_DOWN_BTN,88,34,20,14
     GROUPBOX        "Display Mode",IDC_STATIC,112,67,98,44
     COMBOBOX        IDC_DISPLAY_MODE_COMBO,118,78,86,50,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     LTEXT           "Interval",IDC_STATIC,118,95,28,8
@@ -313,6 +339,15 @@ BEGIN
     LTEXT           "Height",IDC_STATIC,118,139,22,8
     GROUPBOX        "K-Line",IDC_STATIC,112,111,98,44
     EDITTEXT        IDC_KLINE_WIDTH_EDIT,145,122,40,12,ES_AUTOHSCROLL | ES_NUMBER
+    GROUPBOX        "Advanced",IDC_STATIC,112,155,98,56
+    CONTROL         "Status marker",IDC_SHOW_STATUS_MARKER_CHECK,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,118,166,60,10
+    CONTROL         "Alerts",IDC_ENABLE_PRICE_ALERT_CHECK,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,118,177,28,10
+    LTEXT           "Threshold",IDC_STATIC,148,179,27,8
+    EDITTEXT        IDC_ALERT_THRESHOLD_EDIT,177,177,22,12,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "%",IDC_STATIC,201,179,8,8
+    LTEXT           "Tooltip",IDC_STATIC,118,193,24,8
+    EDITTEXT        IDC_TOOLTIP_MAX_ITEMS_EDIT,177,191,22,12,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "items",IDC_STATIC,201,193,12,8
 END
 
 IDD_OPTIONS_DIALOG DIALOGEX 0, 0, 213, 118
@@ -349,7 +384,7 @@ BEGIN
     BEGIN
         LEFTMARGIN, 7
         TOPMARGIN, 7
-        BOTTOMMARGIN, 120
+        BOTTOMMARGIN, 162
     END
 
     IDD_OPTIONS_DIALOG, DIALOG
@@ -416,6 +451,7 @@ BEGIN
     BEGIN
         MENUITEM "Stock List &Manage...",       ID_OPTIONS
         MENUITEM "&Update Stock Info",          ID_UPDATE
+        MENUITEM "&Next Stock",                 ID_NEXT_STOCK
     END
 END
 
@@ -434,7 +470,7 @@ BEGIN
     IDS_MENU_UPDATE_STOCK   "&Update Stock Info"
     IDS_ADD_STOCK           "Add Stock"
     IDS_EDIT_STOCK          "Edit Stock"
-    IDS_CHANGE_STOCK_TIP    "It is required to restart TrafficMonitor to take effect after the stock list is updated."
+    IDS_CHANGE_STOCK_TIP    "The stock list has been updated and will take effect on the next refresh."
     IDS_STOCK_NUM_LIMIT_WARNING "The number of stocks has reached limit!"
     IDS_LOAD_FAIL           "Load failed"
     IDS_LOADING             "Loading..."
@@ -450,6 +486,18 @@ BEGIN
     IDS_DISPLAY_MODE_CAROUSEL   "Carousel"
     IDS_DISPLAY_MODE_MANUAL     "Manual"
     IDS_DISPLAY_MODE_SMART      "Smart"
+    IDS_TIMELINE_NO_DATA        "Timeline data is unavailable"
+    IDS_WAITING_REALTIME_DATA   "Waiting for quote data"
+    IDS_LAST_UPDATE_TIME        "Updated: %s"
+    IDS_TOOLTIP_MORE_ITEMS      "+%u more"
+    IDS_OTHER_STOCK_PREFIX_TIP  "For other symbols, enter a prefixed code such as int_nasdaq, hf_GC, fx_susdcnh, or bn_BTCUSDT."
+    IDS_MENU_NEXT_STOCK         "&Next Stock"
+    IDS_NUMERIC_STOCK_CODE_TIP  "This market requires a numeric code. A-shares/BSE use 6 digits and HK uses 5 digits."
+    IDS_US_STOCK_CODE_TIP       "US symbols may contain only letters, digits, dots, and hyphens."
+    IDS_UPDATE_FOUND_AUTO       "A new Stock plugin version %s is available.\nCurrent version: %s\n\nDo you want to download and update automatically?\n(TrafficMonitor will restart after the update.)"
+    IDS_UPDATE_DOWNLOAD_COMPLETE "The update has been downloaded.\nRestart TrafficMonitor now to apply it?"
+    IDS_UPDATE_AUTO_FAILED      "Automatic update failed. Open the download page instead?"
+    IDS_UPDATE_FOUND_MANUAL     "A new Stock plugin version %s is available.\nCurrent version: %s\n\nOpen the download page now?"
 END
 
 #endif    // 英语(美国) resources

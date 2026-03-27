@@ -5,6 +5,7 @@
 #include <map>
 #include <shared_mutex>
 #include "../Core/IConfigStore.h"
+#include "../StockConstants.h"
 
 namespace StockPlugin {
 namespace Domain {
@@ -33,6 +34,10 @@ struct SettingsSnapshot
     StockDisplayMode displayMode{StockDisplayMode::ShowAll};
     int carouselInterval{5};
     bool checkUpdate{true};
+    bool enablePriceAlert{false};
+    int alertChangePercent{StockConstants::DEFAULT_ALERT_CHANGE_PERCENT};
+    int tooltipMaxItems{StockConstants::DEFAULT_TOOLTIP_MAX_ITEMS};
+    bool showStatusMarker{true};
 
     // 便捷方法
     std::wstring GetAlias(const std::wstring& code) const
@@ -106,6 +111,19 @@ public:
     bool IsCheckUpdateEnabled() const;
     void SetCheckUpdateEnabled(bool value);
 
+    // 状态与tooltip设置
+    bool IsPriceAlertEnabled() const;
+    void SetPriceAlertEnabled(bool value);
+
+    int GetAlertChangePercent() const;
+    void SetAlertChangePercent(int value);
+
+    int GetTooltipMaxItems() const;
+    void SetTooltipMaxItems(int value);
+
+    bool ShowStatusMarker() const;
+    void SetShowStatusMarker(bool value);
+
 private:
     mutable std::shared_mutex m_mutex;
 
@@ -120,6 +138,10 @@ private:
     StockDisplayMode m_displayMode{StockDisplayMode::ShowAll};
     int m_carouselInterval{5};
     bool m_checkUpdate{true};
+    bool m_enablePriceAlert{false};
+    int m_alertChangePercent{StockConstants::DEFAULT_ALERT_CHANGE_PERCENT};
+    int m_tooltipMaxItems{StockConstants::DEFAULT_TOOLTIP_MAX_ITEMS};
+    bool m_showStatusMarker{true};
 };
 
 } // namespace Domain

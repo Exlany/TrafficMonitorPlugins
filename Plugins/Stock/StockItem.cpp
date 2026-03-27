@@ -5,23 +5,70 @@
 #include "Stock.h"
 #include "Common.h"
 #include <algorithm>
+#include <cmath>
 #include "FloatingWnd.h"
 #undef min
 #undef max
+
+namespace
+{
+CString ToCStringOrFallback(const std::wstring& value, const CString& fallback)
+{
+    return value.empty() ? fallback : CString(value.c_str());
+}
+
+CString ToCStringOrFallback(const std::wstring& value, const wchar_t* fallback)
+{
+    return ToCStringOrFallback(value, CString(fallback));
+}
+
+int GetMeasuredPriceWidth(CDC* pDC, const std::shared_ptr<STOCK::StockData>& data)
+{
+    return pDC->GetTextExtent(ToCStringOrFallback(data ? data->realTimeData.displayPrice : std::wstring{}, L"999999.99999999")).cx;
+}
+
+int GetMeasuredFluctuationWidth(CDC* pDC, const std::shared_ptr<STOCK::StockData>& data)
+{
+    CString fallback(L"+999.99%");
+    return (std::max)(pDC->GetTextExtent(fallback).cx,
+        pDC->GetTextExtent(ToCStringOrFallback(data ? data->realTimeData.displayFluctuation : std::wstring{}, fallback)).cx);
+}
+
+CString GetStatusAwareName(const std::shared_ptr<STOCK::StockData>& data, const std::wstring& fallbackCode)
+{
+    if (data != nullptr)
+    {
+        std::wstring name = data->GetDisplayNameWithStatus();
+        if (!name.empty())
+            return CString(name.c_str());
+    }
+    return CString(fallbackCode.c_str());
+}
+
+bool TryGetChangePercent(const std::shared_ptr<STOCK::StockData>& data, double& outChangePercent)
+{
+    if (data == nullptr)
+        return false;
+
+    outChangePercent = data->realTimeData.GetChangePercent();
+    return std::isfinite(outChangePercent);
+}
+}
 
 const wchar_t *StockItem::GetItemName() const
 {
     std::lock_guard<std::mutex> lock(g_data.GetStockDataMutex());
 
-    // 如果 stock_id 为空，返回默认名称
-    if (stock_id.empty())
+    const std::wstring currentStockId = GetPrimaryStockId();
+
+    if (currentStockId.empty())
     {
         m_cached_item_name = g_data.StringRes(IDS_PLUGIN_ITEM_NAME).GetString();
         m_cached_item_name += std::to_wstring(index);
         return m_cached_item_name.c_str();
     }
 
-    auto data = g_data.GetStockData(stock_id);
+    auto data = g_data.GetStockData(currentStockId);
     if (data == nullptr)
     {
         m_cached_item_name = g_data.StringRes(IDS_PLUGIN_ITEM_NAME).GetString();
@@ -32,18 +79,17 @@ const wchar_t *StockItem::GetItemName() const
     if (!data->info.is_ok)
     {
         // 加载失败
-        m_cached_item_name = stock_id + L" " + g_data.StringRes(IDS_LOAD_FAIL).GetString();
-    }
-    else if (!data->info.displayName.empty())
-    {
-        // 使用智能简称或别名
-        m_cached_item_name = data->GetDisplayName();
+        m_cached_item_name = currentStockId + L" " + g_data.StringRes(IDS_LOAD_FAIL).GetString();
     }
     else
     {
-        // 数据未加载，显示默认名称
-        m_cached_item_name = g_data.StringRes(IDS_PLUGIN_ITEM_NAME).GetString();
-        m_cached_item_name += std::to_wstring(index);
+        // 使用带状态前缀的智能简称或别名
+        m_cached_item_name = data->GetDisplayNameWithStatus();
+        if (m_cached_item_name.empty())
+        {
+            m_cached_item_name = g_data.StringRes(IDS_PLUGIN_ITEM_NAME).GetString();
+            m_cached_item_name += std::to_wstring(index);
+        }
     }
     return m_cached_item_name.c_str();
 }
@@ -82,10 +128,7 @@ int StockItem::GetItemWidthEx(void *hDC) const
     SettingsSnapshot settings = g_data.GetSettingsSnapshot();
     const auto& codes = settings.stockCodes;
 
-    int fluctuation_width = pDC->GetTextExtent(_T("-99.99%")).cx;
-    int space_width = pDC->GetTextExtent(_T(" ")).cx;
     int itemSpacing = pDC->GetTextExtent(_T("  ")).cx;
-    int price_width = pDC->GetTextExtent(_T("99999.999")).cx;
 
     if (codes.size() >= 2)
     {
@@ -100,8 +143,8 @@ int StockItem::GetItemWidthEx(void *hDC) const
                 size_t row1Idx = col * 2;
                 size_t row2Idx = col * 2 + 1;
 
-                int col1Width = (row1Idx < total) ? CalcStockDisplayWidth(pDC, codes[row1Idx], price_width, space_width, fluctuation_width) : 0;
-                int col2Width = (row2Idx < total) ? CalcStockDisplayWidth(pDC, codes[row2Idx], price_width, space_width, fluctuation_width) : 0;
+                int col1Width = (row1Idx < total) ? CalcStockDisplayWidth(pDC, codes[row1Idx]) : 0;
+                int col2Width = (row2Idx < total) ? CalcStockDisplayWidth(pDC, codes[row2Idx]) : 0;
                 int colWidth = (std::max)(col1Width, col2Width);
 
                 if (totalWidth > 0)
@@ -115,8 +158,8 @@ int StockItem::GetItemWidthEx(void *hDC) const
             size_t firstIdx = Stock::Instance().GetCurrentDisplayIndex();
             size_t secondIdx = Stock::Instance().GetSecondRowIndex();
 
-            int row1Width = (firstIdx < codes.size()) ? CalcStockDisplayWidth(pDC, codes[firstIdx], price_width, space_width, fluctuation_width) : 0;
-            int row2Width = (secondIdx < codes.size()) ? CalcStockDisplayWidth(pDC, codes[secondIdx], price_width, space_width, fluctuation_width) : 0;
+            int row1Width = (firstIdx < codes.size()) ? CalcStockDisplayWidth(pDC, codes[firstIdx]) : 0;
+            int row2Width = (secondIdx < codes.size()) ? CalcStockDisplayWidth(pDC, codes[secondIdx]) : 0;
 
             return (std::max)(row1Width, row2Width);
         }
@@ -124,7 +167,7 @@ int StockItem::GetItemWidthEx(void *hDC) const
 
     if (!codes.empty())
     {
-        return CalcStockDisplayWidth(pDC, codes[0], price_width, space_width, fluctuation_width);
+        return CalcStockDisplayWidth(pDC, codes[0]);
     }
 
     return 0;
@@ -156,9 +199,9 @@ void StockItem::DrawItem(void *hDC, int x, int y, int w, int h, bool dark_mode)
     }
 
     // 单个股票绘制
-    std::wstring currentStockId = stock_id;
-    if (currentStockId.empty() && !codes.empty())
-        currentStockId = codes[0];
+    std::wstring currentStockId = GetPrimaryStockId();
+    if (currentStockId.empty())
+        return;
 
     DrawStockRow(pDC, currentStockId, x, y, w, h, color_default, color_red, color_green);
 }
@@ -176,6 +219,11 @@ int StockItem::OnMouseEvent(MouseEventType type, int x, int y, void *hWnd, int f
     SettingsSnapshot settings = g_data.GetSettingsSnapshot();
     const auto& codes = settings.stockCodes;
 
+    CRect itemRect;
+    if (pWnd)
+        pWnd->GetClientRect(&itemRect);
+    int availableWidth = itemRect.Width();
+
     switch (type)
     {
     case IPluginItem::MT_RCLICKED:
@@ -184,63 +232,47 @@ int StockItem::OnMouseEvent(MouseEventType type, int x, int y, void *hWnd, int f
 
     case IPluginItem::MT_LCLICKED:
     {
-        // 非ShowAll模式下，单击不触发走势图（避免与双击切换冲突）
         if (settings.displayMode != StockDisplayMode::ShowAll)
         {
-            return 0;  // 不处理单击，让系统继续等待可能的双击
+            std::wstring clickedStockId = GetPrimaryStockId();
+            if (clickedStockId.find(kSZ) == 0 || clickedStockId.find(kBJ) == 0 || clickedStockId.find(kSH) == 0)
+            {
+                Stock::Instance().ShowFloatingWnd(hWnd, CPoint(x, y), clickedStockId);
+                return 1;
+            }
+            return 0;
         }
 
-        // ShowAll模式下，单击显示走势图
-        std::wstring clickedStockId = stock_id;
-
-        // 多行布局时，根据y坐标判断点击的行
-        if (codes.size() >= 2)
+        std::wstring clickedStockId;
+        if (!HitTestShowAllStock(pWnd, x, y, availableWidth, clickedStockId))
         {
-            // 获取窗口客户区高度来判断点击的是哪一行
-            CRect rect;
-            pWnd->GetClientRect(&rect);
-            int rowHeight = rect.Height() / 2;
+            return 0;
+        }
 
-            // 判断点击的是第一行还是第二行
-            bool isSecondRow = (y > rowHeight);
+        if (clickedStockId.find(kSZ) == 0 || clickedStockId.find(kBJ) == 0 || clickedStockId.find(kSH) == 0)
+        {
+            Stock::Instance().ShowFloatingWnd(hWnd, CPoint(x, y), clickedStockId);
+            return 1;
+        }
+        MessageBox((HWND)hWnd, g_data.StringRes(IDS_UNSUPPORT_SHOW_KLINE_STOCK_TIP), g_data.StringRes(IDS_PLUGIN_NAME), MB_ICONINFORMATION | MB_OK);
+        break;
+    }
 
-            // ShowAll模式：2xN矩阵，第一行是0,2,4...，第二行是1,3,5...
-            if (isSecondRow && codes.size() > 1)
+    case IPluginItem::MT_WHEEL_UP:
+    case IPluginItem::MT_WHEEL_DOWN:
+    {
+        if (settings.displayMode != StockDisplayMode::ShowAll && codes.size() > 1)
+        {
+            if (type == IPluginItem::MT_WHEEL_DOWN)
             {
-                // 第二行：找第一个A股（索引1,3,5...）
-                for (size_t i = 1; i < codes.size(); i += 2)
-                {
-                    if (codes[i].find(kSZ) == 0 || codes[i].find(kBJ) == 0 || codes[i].find(kSH) == 0)
-                    {
-                        clickedStockId = codes[i];
-                        break;
-                    }
-                }
+                Stock::Instance().SwitchToNextStock();
             }
             else
             {
-                // 第一行：找第一个A股（索引0,2,4...）
-                for (size_t i = 0; i < codes.size(); i += 2)
-                {
-                    if (codes[i].find(kSZ) == 0 || codes[i].find(kBJ) == 0 || codes[i].find(kSH) == 0)
-                    {
-                        clickedStockId = codes[i];
-                        break;
-                    }
-                }
+                for (size_t i = 0; i < codes.size() - 1; ++i)
+                    Stock::Instance().SwitchToNextStock();
             }
-        }
-
-        // 显示走势图（仅支持A股）
-        if (clickedStockId.find(kSZ) == 0 || clickedStockId.find(kBJ) == 0 || clickedStockId.find(kSH) == 0)
-        {
-            CPoint ptScreen = CPoint(x, y);
-            Stock::Instance().ShowFloatingWnd(hWnd, ptScreen, clickedStockId);
             return 1;
-        }
-        else
-        {
-            MessageBox((HWND)hWnd, g_data.StringRes(IDS_UNSUPPORT_SHOW_KLINE_STOCK_TIP), g_data.StringRes(IDS_PLUGIN_NAME), MB_ICONINFORMATION | MB_OK);
         }
         break;
     }
@@ -263,18 +295,67 @@ int StockItem::OnMouseEvent(MouseEventType type, int x, int y, void *hWnd, int f
     return 0;
 }
 
-int StockItem::CalcStockDisplayWidth(CDC *pDC, const std::wstring& code, int price_width, int space_width, int fluctuation_width)
+int StockItem::OnKeboardEvent(int key, bool ctrl, bool shift, bool alt, void* hWnd, int flag)
+{
+    UNREFERENCED_PARAMETER(ctrl);
+    UNREFERENCED_PARAMETER(shift);
+    UNREFERENCED_PARAMETER(alt);
+    UNREFERENCED_PARAMETER(flag);
+
+    SettingsSnapshot settings = g_data.GetSettingsSnapshot();
+    const auto& codes = settings.stockCodes;
+    if (codes.empty())
+        return 0;
+
+    if (settings.displayMode != StockDisplayMode::ShowAll && codes.size() > 1)
+    {
+        if (key == VK_LEFT || key == VK_UP)
+        {
+            Stock::Instance().SwitchToPreviousStock();
+            return 1;
+        }
+        if (key == VK_RIGHT || key == VK_DOWN || key == VK_SPACE)
+        {
+            Stock::Instance().SwitchToNextStock();
+            return 1;
+        }
+    }
+
+    if (key == VK_RETURN && (settings.displayMode != StockDisplayMode::ShowAll || codes.size() == 1))
+    {
+        std::wstring currentStockId = GetPrimaryStockId();
+        if (currentStockId.find(kSZ) == 0 || currentStockId.find(kBJ) == 0 || currentStockId.find(kSH) == 0)
+        {
+            CWnd* pWnd = CWnd::FromHandle((HWND)hWnd);
+            CRect rect{};
+            if (pWnd != nullptr)
+            {
+                pWnd->GetClientRect(&rect);
+            }
+            Stock::Instance().ShowFloatingWnd(hWnd, rect.CenterPoint(), currentStockId);
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+int StockItem::CalcStockDisplayWidth(CDC *pDC, const std::wstring& code)
 {
     auto data = g_data.GetStockData(code);
     SettingsSnapshot settings = g_data.GetSettingsSnapshot();
+
+    const int space_width = pDC->GetTextExtent(_T(" ")).cx;
+    const int price_width = GetMeasuredPriceWidth(pDC, data);
+    const int fluctuation_width = GetMeasuredFluctuationWidth(pDC, data);
 
     int width = price_width + space_width + fluctuation_width;
 
     if (settings.showStockName)
     {
-        if (data != nullptr && !data->GetDisplayName().empty())
+        if (data != nullptr)
         {
-            CString stock_name{data->GetDisplayName().c_str()};
+            CString stock_name{GetStatusAwareName(data, code)};
             stock_name += _T(": ");
             width += pDC->GetTextExtent(stock_name).cx;
         }
@@ -299,8 +380,11 @@ void StockItem::DrawStockRow(CDC *pDC, const std::wstring& code, int x, int y, i
 
     CRect rect(CPoint(x, y), CSize(w, h));
 
-    int fluctuation_width = pDC->GetTextExtent(_T("-99.99%")).cx;
-    int price_width = pDC->GetTextExtent(_T("99999.999")).cx;
+    CString priceText = ToCStringOrFallback(data->realTimeData.displayPrice, L"--");
+    CString fluctText = ToCStringOrFallback(data->realTimeData.displayFluctuation, L"--%");
+
+    int fluctuation_width = GetMeasuredFluctuationWidth(pDC, data);
+    int price_width = GetMeasuredPriceWidth(pDC, data);
     int space_width = pDC->GetTextExtent(_T(" ")).cx;
 
     CRect rect_fluctuation{rect};
@@ -311,10 +395,10 @@ void StockItem::DrawStockRow(CDC *pDC, const std::wstring& code, int x, int y, i
     rect_price.left = rect_price.right - price_width;
 
     // 绘制名称
-    if (data->info.is_ok && settings.showStockName)
+    if (settings.showStockName)
     {
         pDC->SetTextColor(color_default);
-        CString stock_name{data->GetDisplayName().c_str()};
+        CString stock_name{GetStatusAwareName(data, code)};
         stock_name += _T(": ");
         CRect rect_name{rect};
         rect_name.right = rect_price.left;
@@ -324,10 +408,20 @@ void StockItem::DrawStockRow(CDC *pDC, const std::wstring& code, int x, int y, i
     // 设置数值颜色
     if (settings.colorWithPrice)
     {
-        if (data->realTimeData.displayFluctuation.find('-') != std::wstring::npos)
-            pDC->SetTextColor(color_green);
+        double changePercent = 0.0;
+        if (TryGetChangePercent(data, changePercent))
+        {
+            if (changePercent < -0.0001)
+                pDC->SetTextColor(color_green);
+            else if (changePercent > 0.0001)
+                pDC->SetTextColor(color_red);
+            else
+                pDC->SetTextColor(color_default);
+        }
         else
-            pDC->SetTextColor(color_red);
+        {
+            pDC->SetTextColor(color_default);
+        }
     }
     else
     {
@@ -335,13 +429,9 @@ void StockItem::DrawStockRow(CDC *pDC, const std::wstring& code, int x, int y, i
     }
 
     // 绘制价格
-    const wchar_t* priceText = data->realTimeData.displayPrice.empty()
-        ? L"--" : data->realTimeData.displayPrice.c_str();
     pDC->DrawText(priceText, rect_price, DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_RIGHT);
 
     // 绘制涨跌幅
-    const wchar_t* fluctText = data->realTimeData.displayFluctuation.empty()
-        ? L"--" : data->realTimeData.displayFluctuation.c_str();
     pDC->DrawText(fluctText, rect_fluctuation, DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_RIGHT);
 }
 
@@ -356,10 +446,6 @@ void StockItem::DrawMultiRow(CDC *pDC, int x, int y, int w, int h,
 
     int rowHeight = h / 2;
     int itemSpacing = pDC->GetTextExtent(_T("  ")).cx;
-    int fluctuation_width = pDC->GetTextExtent(_T("-99.99%")).cx;
-    int space_width = pDC->GetTextExtent(_T(" ")).cx;
-    int price_width = pDC->GetTextExtent(_T("99999.999")).cx;
-
     if (settings.displayMode == StockDisplayMode::ShowAll)
     {
         size_t numCols = (total + 1) / 2;
@@ -370,8 +456,8 @@ void StockItem::DrawMultiRow(CDC *pDC, int x, int y, int w, int h,
             size_t row1Idx = col * 2;
             size_t row2Idx = col * 2 + 1;
 
-            int col1Width = (row1Idx < total) ? CalcStockDisplayWidth(pDC, codes[row1Idx], price_width, space_width, fluctuation_width) : 0;
-            int col2Width = (row2Idx < total) ? CalcStockDisplayWidth(pDC, codes[row2Idx], price_width, space_width, fluctuation_width) : 0;
+            int col1Width = (row1Idx < total) ? CalcStockDisplayWidth(pDC, codes[row1Idx]) : 0;
+            int col2Width = (row2Idx < total) ? CalcStockDisplayWidth(pDC, codes[row2Idx]) : 0;
             colWidths[col] = (std::max)(col1Width, col2Width);
         }
 
@@ -413,4 +499,81 @@ void StockItem::DrawMultiRow(CDC *pDC, int x, int y, int w, int h,
         DrawStockRow(pDC, secondCode, x, y + rowHeight, w, rowHeight,
             color_default, color_red, color_green);
     }
+}
+
+std::wstring StockItem::GetPrimaryStockId() const
+{
+    SettingsSnapshot settings = g_data.GetSettingsSnapshot();
+    const auto& codes = settings.stockCodes;
+
+    if (codes.empty())
+        return std::wstring();
+
+    if (codes.size() == 1 || settings.displayMode == StockDisplayMode::ShowAll)
+        return codes.front();
+
+    size_t currentIndex = Stock::Instance().GetCurrentDisplayIndex();
+    if (currentIndex >= codes.size())
+        currentIndex = 0;
+    return codes[currentIndex];
+}
+
+bool StockItem::HitTestShowAllStock(CWnd* pWnd, int clickX, int clickY, int width, std::wstring& clickedStockId) const
+{
+    SettingsSnapshot settings = g_data.GetSettingsSnapshot();
+    const auto& codes = settings.stockCodes;
+    if (pWnd == nullptr || codes.size() < 2)
+        return false;
+
+    CClientDC dc(pWnd);
+    CFont* pFont = pWnd->GetFont();
+    CFont* pOldFont = (pFont != nullptr) ? dc.SelectObject(pFont) : nullptr;
+
+    const size_t total = codes.size();
+    const size_t numCols = (total + 1) / 2;
+    const int itemSpacing = dc.GetTextExtent(_T("  ")).cx;
+
+    std::vector<int> colWidths(numCols);
+    int totalWidth = 0;
+    for (size_t col = 0; col < numCols; ++col)
+    {
+        size_t row1Idx = col * 2;
+        size_t row2Idx = col * 2 + 1;
+        int col1Width = (row1Idx < total) ? CalcStockDisplayWidth(&dc, codes[row1Idx]) : 0;
+        int col2Width = (row2Idx < total) ? CalcStockDisplayWidth(&dc, codes[row2Idx]) : 0;
+        colWidths[col] = (std::max)(col1Width, col2Width);
+        totalWidth += colWidths[col];
+        if (col > 0)
+            totalWidth += itemSpacing;
+    }
+
+    CRect clientRect{};
+    pWnd->GetClientRect(&clientRect);
+    const int rowSplitY = (std::max)(1, clientRect.Height() / 2);
+    const bool isSecondRow = (clickY >= rowSplitY);
+
+    const int availableWidth = width > 0 ? width : clientRect.Width();
+    const int startX = (std::max)(0, availableWidth - totalWidth);
+    int currentX = startX + totalWidth;
+    for (int col = static_cast<int>(numCols) - 1; col >= 0; --col)
+    {
+        currentX -= colWidths[col];
+        if (clickX >= currentX && clickX < currentX + colWidths[col])
+        {
+            size_t index = static_cast<size_t>(col) * 2 + (isSecondRow ? 1 : 0);
+            if (index < total)
+            {
+                clickedStockId = codes[index];
+                if (pOldFont != nullptr)
+                    dc.SelectObject(pOldFont);
+                return true;
+            }
+            break;
+        }
+        currentX -= itemSpacing;
+    }
+
+    if (pOldFont != nullptr)
+        dc.SelectObject(pOldFont);
+    return false;
 }

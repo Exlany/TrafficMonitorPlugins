@@ -13,7 +13,6 @@
 #define IDS_ADD_STOCK                   108
 #define IDS_EDIT_STOCK                  109
 #define IDI_STOCK                       109
-#define IDS_RESTART_TRAFFICMONITOR_INFO 110
 #define IDS_CHANGE_STOCK_TIP            110
 #define IDS_STOCK_NUM_LIMIT_WARNING     111
 #define IDS_UNSUPPORT_SHOW_KLINE_STOCK_TIP 112
@@ -24,6 +23,18 @@
 #define IDS_DISPLAY_MODE_CAROUSEL       117
 #define IDS_DISPLAY_MODE_MANUAL         118
 #define IDS_DISPLAY_MODE_SMART          119
+#define IDS_TIMELINE_NO_DATA            120
+#define IDS_WAITING_REALTIME_DATA       121
+#define IDS_LAST_UPDATE_TIME            122
+#define IDS_TOOLTIP_MORE_ITEMS          123
+#define IDS_OTHER_STOCK_PREFIX_TIP      124
+#define IDS_MENU_NEXT_STOCK             125
+#define IDS_NUMERIC_STOCK_CODE_TIP      126
+#define IDS_US_STOCK_CODE_TIP           127
+#define IDS_UPDATE_FOUND_AUTO           128
+#define IDS_UPDATE_DOWNLOAD_COMPLETE    129
+#define IDS_UPDATE_AUTO_FAILED          130
+#define IDS_UPDATE_FOUND_MANUAL         131
 #define IDC_CODE_EDIT                   1003
 #define IDC_UPDATE_BUTTON               1004
 #define IDC_FULL_DAY_CHECK              1005
@@ -56,18 +67,25 @@
 #define IDC_DISPLAY_MODE_COMBO          1031
 #define IDC_CAROUSEL_INTERVAL_EDIT      1032
 #define IDC_RADIO_OKX                   1033
+#define IDC_MGR_UP_BTN                  1034
+#define IDC_MGR_DOWN_BTN                1035
+#define IDC_SHOW_STATUS_MARKER_CHECK    1036
+#define IDC_ENABLE_PRICE_ALERT_CHECK    1037
+#define IDC_ALERT_THRESHOLD_EDIT        1038
+#define IDC_TOOLTIP_MAX_ITEMS_EDIT      1039
 #define ID_SETTINGS                     40003
 #define ID_UPDATE                       40004
 #define ID_OPTIONS                      40005
 #define ID_Menu                         40006
+#define ID_NEXT_STOCK                   40007
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        110
-#define _APS_NEXT_COMMAND_VALUE         40007
-#define _APS_NEXT_CONTROL_VALUE         1030
+#define _APS_NEXT_RESOURCE_VALUE        132
+#define _APS_NEXT_COMMAND_VALUE         40008
+#define _APS_NEXT_CONTROL_VALUE         1040
 #define _APS_NEXT_SYMED_VALUE           103
 #endif
 #endif

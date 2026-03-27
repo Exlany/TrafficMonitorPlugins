@@ -1,6 +1,38 @@
 #include "pch.h"
 #include "CStockSettings.h"
 #include "../Infrastructure/CIniConfigStore.h"
+#include <algorithm>
+
+namespace
+{
+int ClampInt(int value, int minValue, int maxValue, int defaultValue)
+{
+    if (value < minValue || value > maxValue)
+    {
+        return defaultValue;
+    }
+    return value;
+}
+
+unsigned int ClampUInt(unsigned int value, unsigned int minValue, unsigned int maxValue, unsigned int defaultValue)
+{
+    if (value < minValue || value > maxValue)
+    {
+        return defaultValue;
+    }
+    return value;
+}
+
+StockPlugin::Domain::StockDisplayMode ClampDisplayMode(int value)
+{
+    if (value < static_cast<int>(StockPlugin::Domain::StockDisplayMode::ShowAll) ||
+        value > static_cast<int>(StockPlugin::Domain::StockDisplayMode::Smart))
+    {
+        return StockPlugin::Domain::StockDisplayMode::ShowAll;
+    }
+    return static_cast<StockPlugin::Domain::StockDisplayMode>(value);
+}
+} // namespace
 
 namespace StockPlugin {
 namespace Domain {
@@ -39,12 +71,22 @@ void CStockSettings::Load(Core::IConfigStore& store)
     m_fullDay = store.GetBool(L"config", L"full_day", true);
     m_showStockName = store.GetBool(L"config", L"show_stock_name", true);
     m_colorWithPrice = store.GetBool(L"config", L"color_with_price", true);
-    m_klineWidth = static_cast<unsigned int>(store.GetInt(L"config", L"kline_width", 450));
-    m_klineHeight = static_cast<unsigned int>(store.GetInt(L"config", L"kline_height", 210));
-    m_priceDecimal = store.GetInt(L"config", L"price_decimal", 3);
-    m_displayMode = static_cast<StockDisplayMode>(store.GetInt(L"config", L"display_mode", 0));
-    m_carouselInterval = store.GetInt(L"config", L"carousel_interval", 5);
+    m_klineWidth = static_cast<unsigned int>(ClampInt(store.GetInt(L"config", L"kline_width", StockConstants::DEFAULT_KLINE_WIDTH),
+        100, 2000, StockConstants::DEFAULT_KLINE_WIDTH));
+    m_klineHeight = static_cast<unsigned int>(ClampInt(store.GetInt(L"config", L"kline_height", StockConstants::DEFAULT_KLINE_HEIGHT),
+        50, 1000, StockConstants::DEFAULT_KLINE_HEIGHT));
+    m_priceDecimal = ClampInt(store.GetInt(L"config", L"price_decimal", StockConstants::DEFAULT_PRICE_DECIMAL),
+        2, 8, StockConstants::DEFAULT_PRICE_DECIMAL);
+    m_displayMode = ClampDisplayMode(store.GetInt(L"config", L"display_mode", static_cast<int>(StockDisplayMode::ShowAll)));
+    m_carouselInterval = ClampInt(store.GetInt(L"config", L"carousel_interval", StockConstants::DEFAULT_CAROUSEL_INTERVAL),
+        1, 60, StockConstants::DEFAULT_CAROUSEL_INTERVAL);
     m_checkUpdate = store.GetBool(L"config", L"check_update", true);
+    m_enablePriceAlert = store.GetBool(L"config", L"enable_price_alert", false);
+    m_alertChangePercent = ClampInt(store.GetInt(L"config", L"alert_change_percent", StockConstants::DEFAULT_ALERT_CHANGE_PERCENT),
+        StockConstants::MIN_ALERT_CHANGE_PERCENT, StockConstants::MAX_ALERT_CHANGE_PERCENT, StockConstants::DEFAULT_ALERT_CHANGE_PERCENT);
+    m_tooltipMaxItems = ClampInt(store.GetInt(L"config", L"tooltip_max_items", StockConstants::DEFAULT_TOOLTIP_MAX_ITEMS),
+        StockConstants::MIN_TOOLTIP_MAX_ITEMS, StockConstants::MAX_TOOLTIP_MAX_ITEMS, StockConstants::DEFAULT_TOOLTIP_MAX_ITEMS);
+    m_showStatusMarker = store.GetBool(L"config", L"show_status_marker", true);
 }
 
 void CStockSettings::Save(Core::IConfigStore& store) const
@@ -78,6 +120,10 @@ void CStockSettings::Save(Core::IConfigStore& store) const
     store.SetInt(L"config", L"display_mode", static_cast<int>(m_displayMode));
     store.SetInt(L"config", L"carousel_interval", m_carouselInterval);
     store.SetBool(L"config", L"check_update", m_checkUpdate);
+    store.SetBool(L"config", L"enable_price_alert", m_enablePriceAlert);
+    store.SetInt(L"config", L"alert_change_percent", m_alertChangePercent);
+    store.SetInt(L"config", L"tooltip_max_items", m_tooltipMaxItems);
+    store.SetBool(L"config", L"show_status_marker", m_showStatusMarker);
 
     store.Save();
 }
@@ -191,7 +237,7 @@ int CStockSettings::GetPriceDecimal() const
 void CStockSettings::SetPriceDecimal(int value)
 {
     std::unique_lock<std::shared_mutex> lock(m_mutex);
-    m_priceDecimal = value;
+    m_priceDecimal = ClampInt(value, 2, 8, StockConstants::DEFAULT_PRICE_DECIMAL);
 }
 
 unsigned int CStockSettings::GetKLineWidth() const
@@ -203,7 +249,7 @@ unsigned int CStockSettings::GetKLineWidth() const
 void CStockSettings::SetKLineWidth(unsigned int value)
 {
     std::unique_lock<std::shared_mutex> lock(m_mutex);
-    m_klineWidth = value;
+    m_klineWidth = ClampUInt(value, 100u, 2000u, static_cast<unsigned int>(StockConstants::DEFAULT_KLINE_WIDTH));
 }
 
 unsigned int CStockSettings::GetKLineHeight() const
@@ -215,7 +261,7 @@ unsigned int CStockSettings::GetKLineHeight() const
 void CStockSettings::SetKLineHeight(unsigned int value)
 {
     std::unique_lock<std::shared_mutex> lock(m_mutex);
-    m_klineHeight = value;
+    m_klineHeight = ClampUInt(value, 50u, 1000u, static_cast<unsigned int>(StockConstants::DEFAULT_KLINE_HEIGHT));
 }
 
 StockDisplayMode CStockSettings::GetDisplayMode() const
@@ -227,7 +273,7 @@ StockDisplayMode CStockSettings::GetDisplayMode() const
 void CStockSettings::SetDisplayMode(StockDisplayMode mode)
 {
     std::unique_lock<std::shared_mutex> lock(m_mutex);
-    m_displayMode = mode;
+    m_displayMode = ClampDisplayMode(static_cast<int>(mode));
 }
 
 int CStockSettings::GetCarouselInterval() const
@@ -239,7 +285,7 @@ int CStockSettings::GetCarouselInterval() const
 void CStockSettings::SetCarouselInterval(int seconds)
 {
     std::unique_lock<std::shared_mutex> lock(m_mutex);
-    m_carouselInterval = seconds;
+    m_carouselInterval = ClampInt(seconds, 1, 60, StockConstants::DEFAULT_CAROUSEL_INTERVAL);
 }
 
 bool CStockSettings::IsCheckUpdateEnabled() const
@@ -252,6 +298,60 @@ void CStockSettings::SetCheckUpdateEnabled(bool value)
 {
     std::unique_lock<std::shared_mutex> lock(m_mutex);
     m_checkUpdate = value;
+}
+
+bool CStockSettings::IsPriceAlertEnabled() const
+{
+    std::shared_lock<std::shared_mutex> lock(m_mutex);
+    return m_enablePriceAlert;
+}
+
+void CStockSettings::SetPriceAlertEnabled(bool value)
+{
+    std::unique_lock<std::shared_mutex> lock(m_mutex);
+    m_enablePriceAlert = value;
+}
+
+int CStockSettings::GetAlertChangePercent() const
+{
+    std::shared_lock<std::shared_mutex> lock(m_mutex);
+    return m_alertChangePercent;
+}
+
+void CStockSettings::SetAlertChangePercent(int value)
+{
+    std::unique_lock<std::shared_mutex> lock(m_mutex);
+    m_alertChangePercent = ClampInt(value,
+        StockConstants::MIN_ALERT_CHANGE_PERCENT,
+        StockConstants::MAX_ALERT_CHANGE_PERCENT,
+        StockConstants::DEFAULT_ALERT_CHANGE_PERCENT);
+}
+
+int CStockSettings::GetTooltipMaxItems() const
+{
+    std::shared_lock<std::shared_mutex> lock(m_mutex);
+    return m_tooltipMaxItems;
+}
+
+void CStockSettings::SetTooltipMaxItems(int value)
+{
+    std::unique_lock<std::shared_mutex> lock(m_mutex);
+    m_tooltipMaxItems = ClampInt(value,
+        StockConstants::MIN_TOOLTIP_MAX_ITEMS,
+        StockConstants::MAX_TOOLTIP_MAX_ITEMS,
+        StockConstants::DEFAULT_TOOLTIP_MAX_ITEMS);
+}
+
+bool CStockSettings::ShowStatusMarker() const
+{
+    std::shared_lock<std::shared_mutex> lock(m_mutex);
+    return m_showStatusMarker;
+}
+
+void CStockSettings::SetShowStatusMarker(bool value)
+{
+    std::unique_lock<std::shared_mutex> lock(m_mutex);
+    m_showStatusMarker = value;
 }
 
 SettingsSnapshot CStockSettings::CreateSnapshot() const
@@ -269,6 +369,10 @@ SettingsSnapshot CStockSettings::CreateSnapshot() const
     snapshot.displayMode = m_displayMode;
     snapshot.carouselInterval = m_carouselInterval;
     snapshot.checkUpdate = m_checkUpdate;
+    snapshot.enablePriceAlert = m_enablePriceAlert;
+    snapshot.alertChangePercent = m_alertChangePercent;
+    snapshot.tooltipMaxItems = m_tooltipMaxItems;
+    snapshot.showStatusMarker = m_showStatusMarker;
     return snapshot;
 }
 
@@ -280,12 +384,22 @@ void CStockSettings::ApplySnapshot(const SettingsSnapshot& snapshot)
     m_fullDay = snapshot.fullDay;
     m_showStockName = snapshot.showStockName;
     m_colorWithPrice = snapshot.colorWithPrice;
-    m_priceDecimal = snapshot.priceDecimal;
-    m_klineWidth = snapshot.klineWidth;
-    m_klineHeight = snapshot.klineHeight;
-    m_displayMode = snapshot.displayMode;
-    m_carouselInterval = snapshot.carouselInterval;
+    m_priceDecimal = ClampInt(snapshot.priceDecimal, 2, 8, StockConstants::DEFAULT_PRICE_DECIMAL);
+    m_klineWidth = ClampUInt(snapshot.klineWidth, 100u, 2000u, static_cast<unsigned int>(StockConstants::DEFAULT_KLINE_WIDTH));
+    m_klineHeight = ClampUInt(snapshot.klineHeight, 50u, 1000u, static_cast<unsigned int>(StockConstants::DEFAULT_KLINE_HEIGHT));
+    m_displayMode = ClampDisplayMode(static_cast<int>(snapshot.displayMode));
+    m_carouselInterval = ClampInt(snapshot.carouselInterval, 1, 60, StockConstants::DEFAULT_CAROUSEL_INTERVAL);
     m_checkUpdate = snapshot.checkUpdate;
+    m_enablePriceAlert = snapshot.enablePriceAlert;
+    m_alertChangePercent = ClampInt(snapshot.alertChangePercent,
+        StockConstants::MIN_ALERT_CHANGE_PERCENT,
+        StockConstants::MAX_ALERT_CHANGE_PERCENT,
+        StockConstants::DEFAULT_ALERT_CHANGE_PERCENT);
+    m_tooltipMaxItems = ClampInt(snapshot.tooltipMaxItems,
+        StockConstants::MIN_TOOLTIP_MAX_ITEMS,
+        StockConstants::MAX_TOOLTIP_MAX_ITEMS,
+        StockConstants::DEFAULT_TOOLTIP_MAX_ITEMS);
+    m_showStatusMarker = snapshot.showStatusMarker;
 }
 
 } // namespace Domain

@@ -502,7 +502,8 @@ std::wstring SmartStockCode(const std::wstring& input)
     // 1. 检查是否已有前缀
     if (code.find(L"sz") == 0 || code.find(L"sh") == 0 || code.find(L"bj") == 0 ||
         code.find(L"rt_hk") == 0 || code.find(L"gb_") == 0 || code.find(L"int_") == 0 ||
-        code.find(L"okx_") == 0 || code.find(L"hf_") == 0)
+        code.find(L"okx_") == 0 || code.find(L"hf_") == 0 || code.find(L"bn_") == 0 ||
+        code.find(L"fx_") == 0)
     {
         return code;
     }

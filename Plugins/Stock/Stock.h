@@ -43,8 +43,10 @@ public:
 
     void ShowFloatingWnd(void *hWnd, CPoint ptScreen, std::wstring stock_id);
     void DestroyFloatingWnd();
+    bool HasVisibleFloatingWnd();
     void UpdateKLine();
     void SwitchToNextStock();  // 手动模式下切换到下一只股票
+    void SwitchToPreviousStock();
     size_t GetCurrentDisplayIndex() const { return m_current_display_index; }  // 获取当前显示的股票索引
     size_t GetSecondRowIndex();  // 获取第二行显示的股票索引
 
@@ -59,6 +61,8 @@ private:
     static Stock m_instance;
     std::vector<StockItem> m_items;
     mutable std::shared_mutex m_itemsMutex;
+    mutable std::mutex m_tooltipMutex;
+    std::wstring m_tooltip_info;
 
     std::atomic<bool> m_is_thread_running{};
     CManagerDialog *m_option_dlg{};         // 保存选项设置对话框的句柄
@@ -67,6 +71,7 @@ private:
 
     std::mutex m_wndMutex;
     std::unique_ptr<CFloatingWnd> m_pFloatingWnd;
+    std::atomic<unsigned __int64> m_tooltip_suppress_until{0};
 
     // 显示模式相关
     std::atomic<int> m_current_display_index{0};      // 当前显示的股票索引

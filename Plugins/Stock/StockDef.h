@@ -69,6 +69,8 @@ namespace STOCK
     // 格式化显示价格和涨跌幅
     // adaptiveDecimal: true 表示根据价格大小自适应小数位（用于虚拟货币）
     void FormatDisplay(int priceDecimal, bool adaptiveDecimal = false);
+    bool HasValidQuote() const;
+    double GetChangePercent() const;
   };
 
   // 分时数据点
@@ -139,6 +141,8 @@ namespace STOCK
     std::wstring GetCurrentDisplay(bool include_name = true) const;
     // 获取显示名称（优先别名，其次智能简称）
     std::wstring GetDisplayName() const;
+    // 获取带轻量状态前缀的显示名称
+    std::wstring GetDisplayNameWithStatus() const;
 
     // 使用智能指针管理历史数据
     std::map<Period, std::shared_ptr<HistoricalDataBase>> historicalData;

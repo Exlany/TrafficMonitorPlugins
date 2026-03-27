@@ -76,6 +76,12 @@ namespace StockConstants
     constexpr int DEFAULT_KLINE_HEIGHT = 210;      // 默认K线图高度
     constexpr int DEFAULT_CAROUSEL_INTERVAL = 5;   // 默认轮播间隔(秒)
     constexpr int DEFAULT_PRICE_DECIMAL = 3;       // 默认价格小数位数
+    constexpr int DEFAULT_TOOLTIP_MAX_ITEMS = 6;   // tooltip 默认最多展示条目
+    constexpr int MIN_TOOLTIP_MAX_ITEMS = 1;       // tooltip 最小展示条目
+    constexpr int MAX_TOOLTIP_MAX_ITEMS = 20;      // tooltip 最大展示条目
+    constexpr int DEFAULT_ALERT_CHANGE_PERCENT = 5; // 默认涨跌幅预警阈值(%)
+    constexpr int MIN_ALERT_CHANGE_PERCENT = 1;    // 预警阈值最小值(%)
+    constexpr int MAX_ALERT_CHANGE_PERCENT = 30;   // 预警阈值最大值(%)
 
     // ------------------------------------------------------------------------
     // 分时图时间计算常量

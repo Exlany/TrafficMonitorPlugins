@@ -5,6 +5,7 @@
 #include <sstream>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include "Common.h"
 #include <DataManager.h>
 #include "utilities/yyjson/yyjson.h"
@@ -111,7 +112,7 @@ void STOCK::RealTimeData::Load(std::wstring key, const std::vector<std::string>&
   {
     LoadHK(data_arr, data_size);
   }
-  else if (key.find(kMGI) == 0)
+  else if (key.find(kMGI) == 0 || key.find(kHF) == 0)
   {
     LoadINT(data_arr, data_size);
   }
@@ -120,6 +121,11 @@ void STOCK::RealTimeData::Load(std::wstring key, const std::vector<std::string>&
   {
     SettingsSnapshot settings = g_data.GetSettingsSnapshot();
     FormatDisplay(settings.priceDecimal);
+  }
+  else
+  {
+    displayPrice = L"--";
+    displayFluctuation = L"--%";
   }
 }
 
@@ -203,8 +209,12 @@ void STOCK::RealTimeData::LoadINT(const std::vector<std::string>& data, size_t s
 
 void STOCK::RealTimeData::FormatDisplay(int priceDecimal, bool adaptiveDecimal)
 {
-  if (currentPrice <= 0 || prevClosePrice <= 0)
+  if (!HasValidQuote())
+  {
+    displayPrice = L"--";
+    displayFluctuation = L"--%";
     return;
+  }
 
   char buff[32];
   if (adaptiveDecimal)
@@ -233,8 +243,29 @@ void STOCK::RealTimeData::FormatDisplay(int priceDecimal, bool adaptiveDecimal)
   }
   displayPrice = CCommon::StrToUnicode(buff);
 
-  sprintf_s(buff, "%+.2f%%", ((currentPrice - prevClosePrice) / prevClosePrice * 100));
-  displayFluctuation = CCommon::StrToUnicode(buff);
+  const double changePercent = GetChangePercent();
+  if (std::isfinite(changePercent))
+  {
+    sprintf_s(buff, "%+.2f%%", changePercent);
+    displayFluctuation = CCommon::StrToUnicode(buff);
+  }
+  else
+  {
+    displayFluctuation = L"--%";
+  }
+}
+
+bool STOCK::RealTimeData::HasValidQuote() const
+{
+  return std::isfinite(currentPrice) && std::isfinite(prevClosePrice) && currentPrice > 0 && prevClosePrice > 0;
+}
+
+double STOCK::RealTimeData::GetChangePercent() const
+{
+  if (!HasValidQuote() || std::abs(prevClosePrice) < std::numeric_limits<double>::epsilon())
+    return std::numeric_limits<double>::quiet_NaN();
+
+  return (currentPrice - prevClosePrice) / prevClosePrice * 100.0;
 }
 
 void STOCK::StockMarket::LoadTimelineDataByJson(std::wstring stock_id, CString *pData)
@@ -256,7 +287,7 @@ std::wstring STOCK::StockData::GetCurrentDisplay(bool include_name) const
   if (info.is_ok)
   {
     if (include_name)
-      wss << GetDisplayName() << ": ";
+      wss << GetDisplayNameWithStatus() << ": ";
     wss << realTimeData.displayPrice << ' ' << realTimeData.displayFluctuation;
   }
   else
@@ -277,6 +308,41 @@ std::wstring STOCK::StockData::GetDisplayName() const
   }
   // 其次使用智能简称
   return CCommon::SmartShortName(info.displayName);
+}
+
+std::wstring STOCK::StockData::GetDisplayNameWithStatus() const
+{
+  const SettingsSnapshot settings = g_data.GetSettingsSnapshot();
+  std::wstring baseName = GetDisplayName();
+  if (baseName.empty())
+  {
+    baseName = info.code;
+  }
+
+  if (!settings.showStatusMarker)
+    return baseName;
+
+  if (!info.is_ok)
+    return L"[!] " + baseName;
+
+  if (!realTimeData.HasValidQuote())
+    return L"[?] " + baseName;
+
+  if (!settings.enablePriceAlert)
+    return baseName;
+
+  const double changePercent = realTimeData.GetChangePercent();
+  if (!std::isfinite(changePercent))
+    return baseName;
+
+  const double threshold = static_cast<double>(settings.alertChangePercent);
+  if (changePercent >= threshold)
+    return L"[+] " + baseName;
+
+  if (changePercent <= -threshold)
+    return L"[-] " + baseName;
+
+  return baseName;
 }
 
 template<typename T>

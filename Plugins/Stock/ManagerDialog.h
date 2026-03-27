@@ -22,6 +22,11 @@ public:
 
 private:
 	CSize m_min_size;		//窗口的最小大小
+    void RefreshStockList(int selectedIndex = -1);
+    void UpdateDisplayModeControls();
+    void UpdateActionButtonState();
+    void UpdateAlertControls();
+    CString FormatStockListEntry(const std::wstring& code) const;
 
 protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 支持
@@ -33,6 +38,8 @@ public:
 	afx_msg void OnListItemClick();
 	afx_msg void OnDelBtnClick();
 	afx_msg void OnAddBtnClick();
+	afx_msg void OnMoveUpBtnClick();
+	afx_msg void OnMoveDownBtnClick();
 	afx_msg void OnClickedFullDayCheck();
 	afx_msg void OnBnClickedOk();
 	afx_msg void OnBnClickedCancel();
@@ -40,4 +47,6 @@ public:
 	afx_msg void OnGetMinMaxInfo(MINMAXINFO* lpMMI);
 	afx_msg void OnBnClickedShowStockNameCheck();
 	afx_msg void OnBnClickedColorWithPriceCheck();
+	afx_msg void OnBnClickedEnablePriceAlertCheck();
+    afx_msg void OnCbnSelchangeDisplayModeCombo();
 };

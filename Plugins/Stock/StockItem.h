@@ -11,6 +11,7 @@ public:
     virtual const wchar_t* GetItemValueText() const override;
     virtual const wchar_t* GetItemValueSampleText() const override;
     virtual int OnMouseEvent(MouseEventType type, int x, int y, void* hWnd, int flag) override;
+    virtual int OnKeboardEvent(int key, bool ctrl, bool shift, bool alt, void* hWnd, int flag) override;
     virtual void DrawItem(void* hDC, int x, int y, int w, int h, bool dark_mode) override;
 	virtual bool IsCustomDraw() const override;
 	virtual int GetItemWidthEx(void* hDC) const override;
@@ -24,11 +25,13 @@ public:
     mutable std::wstring m_cached_item_name;
 
 private:
+    std::wstring GetPrimaryStockId() const;
+    bool HitTestShowAllStock(CWnd* pWnd, int clickX, int clickY, int width, std::wstring& clickedStockId) const;
     // 绘制辅助函数
     void DrawStockRow(CDC *pDC, const std::wstring& code, int x, int y, int w, int h,
         COLORREF color_default, COLORREF color_red, COLORREF color_green);
     void DrawMultiRow(CDC *pDC, int x, int y, int w, int h,
         COLORREF color_default, COLORREF color_red, COLORREF color_green);
     // 计算单个股票的显示宽度
-    static int CalcStockDisplayWidth(CDC *pDC, const std::wstring& code, int price_width, int space_width, int fluctuation_width);
+    static int CalcStockDisplayWidth(CDC *pDC, const std::wstring& code);
 };

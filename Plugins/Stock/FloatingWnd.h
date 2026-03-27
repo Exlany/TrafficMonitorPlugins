@@ -23,6 +23,7 @@ protected:
     afx_msg void OnPaint();
     afx_msg BOOL OnEraseBkgnd(CDC *pDC);
     afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
+    afx_msg void OnActivate(UINT nState, CWnd* pWndOther, BOOL bMinimized);
     afx_msg int OnCreate(LPCREATESTRUCT lpCreateStruct);
     LRESULT OnUpdateStatus(WPARAM wParam, LPARAM lParam);
     LRESULT OnRequestData(WPARAM wParam, LPARAM lParam);
@@ -31,12 +32,22 @@ private:
     static UINT NetworkThreadProc(LPVOID pParam); // 线程函数
     CPoint Stock2Point(int x, int y, int w, int h, float unitY, const STOCK::TimelinePoint &item, const STOCK::Price prevClosePrice);
     void DrawGrid(CDC *pDC, int w, int h, int timelineH);
-    void DrawPriceLabels(CDC *pDC, const STOCK::RealTimeData &realtimeData, int w, int timelineH);
+    void DrawPriceLabels(CDC *pDC, const STOCK::RealTimeData &realtimeData, int w, int timelineH, STOCK::Price displayPriceLimit);
     void DrawTimelineCurve(CDC *pDC, const std::vector<STOCK::TimelinePoint> &timelinePoint,
-                           const STOCK::RealTimeData &realtimeData, int x, int y, int w, int h);
+                           const STOCK::RealTimeData &realtimeData, int x, int y, int w, int h, STOCK::Price displayPriceLimit);
     void DrawVolumeChart(CDC *pDC, const std::vector<STOCK::TimelinePoint> &timelinePoint,
                          const std::vector<CPoint> &dataPoints, STOCK::Price prevClosePrice,
                          int volumeTop, int volumeH, int w);
+    void DrawSummaryHeader(CDC* pDC, const CRect& headerRect, const std::wstring& stockName,
+                           const std::wstring& stockCode, const STOCK::RealTimeData& realtimeData,
+                           const std::string& lastTimelineTime, bool hasRealtimeData, bool hasTimelineData);
+    void DrawCenteredStatusText(CDC* pDC, const CRect& drawRect, const CString& statusText, COLORREF textColor);
+    STOCK::Price CalculateDisplayPriceLimit(const STOCK::RealTimeData& realtimeData,
+                                            const std::vector<STOCK::TimelinePoint>& timelinePoint) const;
+    COLORREF GetFluctuationColor(const STOCK::RealTimeData& realtimeData, bool hasRealtimeData) const;
+    CRect GetCloseButtonRect(const CRect& headerRect) const;
+    void DrawCloseButton(CDC* pDC, const CRect& headerRect);
+    void RequestClose();
 
     CTransparentWnd m_transparentWnd;
     std::wstring m_stockId;
